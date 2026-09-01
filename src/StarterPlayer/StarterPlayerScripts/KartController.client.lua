@@ -201,10 +201,13 @@ local function updateKart(dt)
 	if isGrounded then
 		if dk and not drifting and speed > 30 then
 			yVelocity = CFG.hopHeight
-			drifting = true
-			driftDir = str ~= 0 and math.sign(str) or 0
-			driftTime = 0
-			driftLevel = 0
+			-- Só entra em drift se o jogador estiver a tentar virar no momento do salto
+			if math.abs(str) > 0.1 then
+				drifting = true
+				driftDir = math.sign(str)
+				driftTime = 0
+				driftLevel = 0
+			end
 		elseif dk and drifting then
 			driftTime = driftTime + dt
 			local newLevel = 0
@@ -277,12 +280,22 @@ local function updateKart(dt)
 	
 	if math.abs(speed) > 2 then
 		if drifting and driftDir ~= 0 then
-			-- Drift steering logic
-			if math.sign(str) == math.sign(driftDir) then
-				turnAmt = str * CFG.driftTurn
+			-- No Mario Kart, o drift puxa-te naturalmente na direção da curva.
+			-- Se virares na mesma direção, curvas muito mais apertado.
+			-- Se virares na direção oposta, a curva abre bastante.
+			
+			local baseTurn = driftDir * CFG.turnSpeed * 0.6
+			local steerAdjust = str * CFG.driftTurn * 0.8
+			
+			turnAmt = baseTurn + steerAdjust
+			
+			-- Limitar a viragem para que não faças a curva ao contrário
+			if driftDir > 0 then
+				turnAmt = math.clamp(turnAmt, -CFG.turnSpeed * 0.3, CFG.driftTurn * 1.3)
 			else
-				turnAmt = driftDir * (CFG.driftTurn * 0.5) + (str * 0.5)
+				turnAmt = math.clamp(turnAmt, -CFG.driftTurn * 1.3, CFG.turnSpeed * 0.3)
 			end
+			
 			targetTilt = -driftDir * CFG.maxTilt * 1.5 -- Inclinar bastante durante drift
 		else
 			turnAmt = str * CFG.turnSpeed
