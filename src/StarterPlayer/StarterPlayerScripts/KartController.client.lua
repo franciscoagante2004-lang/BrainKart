@@ -137,9 +137,9 @@ local function updateKart(dt)
 		local gp = gamepads[1] -- Usar o primeiro comando ligado
 		local state = UIS:GetGamepadState(gp)
 		for _, input in ipairs(state) do
-			if input.KeyCode == Enum.KeyCode.ButtonA and input.UserInputState == Enum.UserInputState.Begin then
+			if input.KeyCode == Enum.KeyCode.ButtonB and input.UserInputState == Enum.UserInputState.Begin then
 				acc = 1
-			elseif input.KeyCode == Enum.KeyCode.ButtonB and input.UserInputState == Enum.UserInputState.Begin then
+			elseif input.KeyCode == Enum.KeyCode.ButtonA and input.UserInputState == Enum.UserInputState.Begin then
 				acc = -0.5
 			elseif (input.KeyCode == Enum.KeyCode.ButtonR1 or input.KeyCode == Enum.KeyCode.ButtonR2) and input.UserInputState == Enum.UserInputState.Begin then
 				dk = true
