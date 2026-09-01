@@ -1,4 +1,4 @@
--- KartController (StarterPlayerScripts) - MK8 Physics v5 LocalScript
+-- KartController (StarterPlayerScripts) - Hyper Karts Physics LocalScript
 -- Controlos: W/A/S/D = conduzir | SPACE/LShift = drift+boost | E = item
 
 local Players   = game:GetService("Players")
@@ -11,24 +11,29 @@ local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
 -- ============================================================
--- CONFIGURACAO MK8 DELUXE
+-- CONFIGURACAO HYPER KARTS (Base MK8)
 -- ============================================================
 local CFG = {
-	accel       = 70,     -- aceleração rápida
-	maxSpeed    = 130,    -- velocidade máxima normal (studs/s)
+	accel       = 80,     -- aceleração rápida
+	maxSpeed    = 135,    -- velocidade máxima normal (studs/s)
 	brakeForce  = 0.90,   -- força de travagem
-	decel       = 0.96,   -- desaceleração natural
+	decel       = 0.97,   -- desaceleração natural
+	offroadDecel= 0.85,   -- desaceleração extra quando na relva/terra
 	reverseSpd  = 30,     -- velocidade máxima em marcha atrás
-	turnSpeed   = 3.5,    -- agilidade de viragem (rápida)
+	turnSpeed   = 3.8,    -- agilidade de viragem (rápida)
+	
+	-- Tilt Visual
+	maxTilt     = math.rad(15), -- quão inclinado o kart fica na curva
+	tiltSpeed   = 6,      -- suavidade da inclinação
 	
 	-- Drift & Boost (Mini-Turbos)
-	driftTurn   = 4.5,    -- viragem mais apertada durante o drift
+	driftTurn   = 5.0,    -- viragem mais apertada durante o drift
 	hopHeight   = 22,     -- força do salto ao iniciar o drift
 	driftMin    = 0.6,    -- tempo mínimo para o nível 1 (Azul)
 	driftMed    = 1.8,    -- tempo mínimo para nível 2 (Laranja)
 	driftMax    = 3.5,    -- tempo mínimo para nível 3 (Rosa)
 	
-	boostSpds   = { 160, 190, 240 }, -- velocidades de boost (Azul, Laranja, Rosa)
+	boostSpds   = { 170, 205, 255 }, -- velocidades de boost (Azul, Laranja, Rosa)
 	boostDurs   = { 0.8, 1.8, 3.2 }, -- durações de boost
 	
 	-- Suspensão (Raycast)
@@ -39,6 +44,8 @@ local CFG = {
 	camDist     = 22,
 	camHeight   = 9,
 	camSmooth   = 0.15,
+	baseFOV     = 70,
+	boostFOV    = 90,
 }
 
 -- ============================================================
@@ -53,6 +60,8 @@ local enabled  = false  -- so ativa apos GO!
 local stunEnd  = 0
 local groundNormal = Vector3.new(0, 1, 0)
 local isGrounded = false
+local currentTilt = 0
+local isOnOffroad = false
 
 -- Referências para as faíscas
 local sparkEmitters = {}
@@ -115,7 +124,7 @@ local function setSparks(level)
 end
 
 -- ============================================================
--- FISICAS DO KART (MK8)
+-- FISICAS DO KART (HYPER KARTS)
 -- ============================================================
 local function updateKart(dt)
 	if not kartRoot then return end
@@ -152,12 +161,20 @@ local function updateKart(dt)
 	end
 
 	local topSpd = CFG.maxSpeed
+	
+	-- Efeito de FOV na câmara durante Boost
+	local targetFOV = CFG.baseFOV
 	if boosting then
-		if tick() > boostEnd then boosting = false
-		else topSpd = currentBoostSpeed end
+		if tick() > boostEnd then 
+			boosting = false
+		else 
+			topSpd = currentBoostSpeed
+			targetFOV = CFG.boostFOV 
+		end
 	end
+	camera.FieldOfView = camera.FieldOfView + (targetFOV - camera.FieldOfView) * 10 * dt
 
-	-- Raycast para o chão
+	-- Raycast para o chão & Offroad Detect
 	local rayParams = RaycastParams.new()
 	rayParams.FilterDescendantsInstances = {kart, player.Character}
 	rayParams.FilterType = Enum.RaycastFilterType.Exclude
@@ -166,10 +183,15 @@ local function updateKart(dt)
 	local rDir = -kartRoot.CFrame.UpVector * (CFG.rideHeight + 2)
 	local rResult = workspace:Raycast(rOrigin, rDir, rayParams)
 	
+	isOnOffroad = false
 	if rResult then
 		isGrounded = true
-		-- Suavizar a normal do chão para o carro não tremer muito
 		groundNormal = groundNormal:Lerp(rResult.Normal, 15 * dt).Unit
+		
+		-- Detetar Relva ou Areia (Off-road)
+		if rResult.Material == Enum.Material.Grass or rResult.Material == Enum.Material.Sand or rResult.Material == Enum.Material.LeafyGrass then
+			isOnOffroad = true
+		end
 	else
 		isGrounded = false
 		groundNormal = groundNormal:Lerp(Vector3.new(0, 1, 0), 5 * dt).Unit
@@ -178,17 +200,13 @@ local function updateKart(dt)
 	-- Drift & Hop
 	if isGrounded then
 		if dk and not drifting and speed > 30 then
-			-- Iniciar o Salto (Hop)
 			yVelocity = CFG.hopHeight
 			drifting = true
 			driftDir = str ~= 0 and math.sign(str) or 0
 			driftTime = 0
 			driftLevel = 0
 		elseif dk and drifting then
-			-- Manter o Drift
 			driftTime = driftTime + dt
-			
-			-- Atualizar o nível do Mini-Turbo (Sparks)
 			local newLevel = 0
 			if driftTime >= CFG.driftMax then newLevel = 3
 			elseif driftTime >= CFG.driftMed then newLevel = 2
@@ -199,17 +217,14 @@ local function updateKart(dt)
 				setSparks(driftLevel)
 			end
 		elseif not dk and drifting then
-			-- Largar o Drift (Boost)
 			drifting = false
 			setSparks(0)
-			
 			if driftLevel > 0 then
 				boosting = true
 				currentBoostSpeed = CFG.boostSpds[driftLevel]
 				boostEnd = tick() + CFG.boostDurs[driftLevel]
 				speed = currentBoostSpeed
 				
-				-- Flash no HUD
 				task.spawn(function()
 					local gui = player.PlayerGui:FindFirstChild("RaceHUD")
 					if not gui then return end
@@ -226,11 +241,17 @@ local function updateKart(dt)
 			driftLevel = 0
 		end
 	else
-		-- Se não está no chão, cancelar o drift
 		if not dk and drifting then
 			drifting = false
 			setSparks(0)
 		end
+	end
+
+	-- Penalidade Off-road (abrandar muito se não estiver em boost)
+	local effectiveDecel = CFG.decel
+	if isOnOffroad and not boosting then
+		effectiveDecel = CFG.offroadDecel
+		topSpd = topSpd * 0.4 -- Velocidade máxima baixa na relva
 	end
 
 	-- Aceleração e Velocidade
@@ -241,12 +262,19 @@ local function updateKart(dt)
 			and speed * CFG.brakeForce 
 			or math.max(speed + (acc * CFG.accel * dt * 0.5), -CFG.reverseSpd)
 	else
-		speed = speed * CFG.decel
+		speed = speed * effectiveDecel
 		if math.abs(speed) < 1 then speed = 0 end
 	end
 	
-	-- Viragem
+	-- Se estiver no off-road, forçar redução de velocidade rapidamente
+	if isOnOffroad and not boosting and speed > topSpd then
+		speed = speed * effectiveDecel
+	end
+	
+	-- Viragem e Inclinação (Tilt)
 	local turnAmt = 0
+	local targetTilt = 0
+	
 	if math.abs(speed) > 2 then
 		if drifting and driftDir ~= 0 then
 			-- Drift steering logic
@@ -255,10 +283,15 @@ local function updateKart(dt)
 			else
 				turnAmt = driftDir * (CFG.driftTurn * 0.5) + (str * 0.5)
 			end
+			targetTilt = -driftDir * CFG.maxTilt * 1.5 -- Inclinar bastante durante drift
 		else
 			turnAmt = str * CFG.turnSpeed
+			targetTilt = -str * CFG.maxTilt -- Inclinar ligeiramente a curvar normal
 		end
 	end
+	
+	-- Suavizar a inclinação visual
+	currentTilt = currentTilt + (targetTilt - currentTilt) * CFG.tiltSpeed * dt
 
 	-- Rotação e Alinhamento com a pista
 	local forward = kartRoot.CFrame.LookVector
@@ -267,7 +300,9 @@ local function updateKart(dt)
 	
 	-- Aplicar a viragem à nova orientação
 	local turnRot = CFrame.Angles(0, -turnAmt * dt * math.sign(speed), 0)
-	local targetCF = CFrame.fromMatrix(kartRoot.Position, right, groundNormal, -newForward) * turnRot
+	
+	-- Aplicar a inclinação (Tilt visual no eixo Z)
+	local targetCF = CFrame.fromMatrix(kartRoot.Position, right, groundNormal, -newForward) * turnRot * CFrame.Angles(0, 0, currentTilt)
 	
 	kartRoot.CFrame = targetCF
 
@@ -327,7 +362,7 @@ local function waitForKart()
 		if kartRoot then
 			speed = 0
 			setupSparks()
-			print("[KC] Kart MK8 encontrado: " .. kart.Name)
+			print("[KC] Kart Hyper/MK8 encontrado: " .. kart.Name)
 		else
 			attempts = attempts + 1
 			task.wait(0.5)
@@ -360,6 +395,7 @@ player.CharacterAdded:Connect(function()
 	speed, yVelocity = 0, 0
 	enabled, drifting = false, false
 	sparkEmitters = {}
+	camera.FieldOfView = CFG.baseFOV
 	task.spawn(waitForKart)
 end)
 if player.Character then task.spawn(waitForKart) end
@@ -374,4 +410,4 @@ RS.RenderStepped:Connect(function()
 	if kartRoot and kartRoot.Parent then updateCamera() end
 end)
 
-print("[KC] KartController MK8 Deluxe carregado!")
+print("[KC] KartController Hyper Karts carregado!")
