@@ -30,7 +30,7 @@ local CFG = {
 	driftTurn   = 5.0,    -- viragem mais apertada durante o drift
 	hopHeight   = 22,     -- força do salto ao iniciar o drift
 	
-	-- Mini-Turbo Charge (frames/pontos por segundo em vez de apenas tempo)
+	-- Mini-Turbo Charge
 	baseChargeRate = 1.0,
 	mtThreshold1 = 0.6,    -- Limiar Azul
 	mtThreshold2 = 1.8,    -- Limiar Laranja
@@ -66,6 +66,7 @@ local groundNormal = Vector3.new(0, 1, 0)
 local isGrounded = false
 local currentTilt = 0
 local isOnOffroad = false
+local lastBump = 0 -- Cooldown de colisão com parede
 
 -- Momentum Desacoplado
 local movementVector = Vector3.new(0, 0, -1)
@@ -130,12 +131,27 @@ local function setSparks(level)
 	end
 end
 
+local function cancelDrift()
+	drifting = false
+	mtCharge = 0
+	driftLevel = 0
+	setSparks(0)
+end
+
 -- ============================================================
 -- FISICAS DO KART (ADVANCED MK8)
 -- ============================================================
 local function updateKart(dt)
 	if not kartRoot then return end
-	if tick() < stunEnd then speed = speed * 0.88; return end
+	
+	-- HITSTUN: Se bater de frente numa parede, perde controlo
+	if tick() < stunEnd then 
+		speed = speed * 0.88 
+		-- Aplicar gravidade passiva
+		yVelocity = yVelocity - (CFG.downForce * dt)
+		kartRoot.AssemblyLinearVelocity = (movementVector * speed) + Vector3.new(0, yVelocity, 0)
+		return 
+	end
 
 	local acc, str = 0, 0
 	local dk = false -- drift key
@@ -174,7 +190,7 @@ local function updateKart(dt)
 
 	local topSpd = CFG.maxSpeed
 	
-	-- Efeito de FOV na câmara durante Boost
+	-- BOOST OVERRIDE
 	local targetFOV = CFG.baseFOV
 	if boosting then
 		if tick() > boostEnd then 
@@ -186,11 +202,12 @@ local function updateKart(dt)
 	end
 	camera.FieldOfView = camera.FieldOfView + (targetFOV - camera.FieldOfView) * 10 * dt
 
-	-- Raycast para o chão & Offroad Detect
+	-- Raycasts
 	local rayParams = RaycastParams.new()
 	rayParams.FilterDescendantsInstances = {kart, player.Character}
 	rayParams.FilterType = Enum.RaycastFilterType.Exclude
 	
+	-- RAYCAST 1: CHÃO (Offroad & Orientação)
 	local rOrigin = kartRoot.CFrame.Position
 	local rDir = -kartRoot.CFrame.UpVector * (CFG.rideHeight + 2)
 	local rResult = workspace:Raycast(rOrigin, rDir, rayParams)
@@ -208,17 +225,43 @@ local function updateKart(dt)
 		isGrounded = false
 		groundNormal = groundNormal:Lerp(Vector3.new(0, 1, 0), 5 * dt).Unit
 	end
+	
+	-- RAYCAST 2: COLISÕES RÍGIDAS (Paredes)
+	if speed > 20 and tick() > lastBump then
+		-- Verifica à frente
+		local wallRay = workspace:Raycast(rOrigin, movementVector * 6, rayParams)
+		if wallRay then
+			local dot = -movementVector:Dot(wallRay.Normal)
+			if dot > 0.65 then
+				-- ÂNGULO OBTUSO (Frontal): Hitstun, cancela tudo, speed 0
+				cancelDrift()
+				speed = 0
+				stunEnd = tick() + 0.6
+				lastBump = tick() + 0.8
+			elseif dot > 0.1 then
+				-- ÂNGULO AGUDO (Roçar de raspão): Perde 20% da velocidade, repele
+				speed = speed * 0.8
+				movementVector = (movementVector + wallRay.Normal * 0.5).Unit
+				lastBump = tick() + 0.3
+			end
+		end
+	end
 
-	-- Penalidade Off-road
+	-- EFEITO OFF-ROAD
 	local effectiveDecel = CFG.decel
 	if isOnOffroad and not boosting then
 		effectiveDecel = CFG.offroadDecel
-		topSpd = topSpd * 0.4 
+		topSpd = topSpd * 0.3 -- Velocidade máxima cai drasticamente para 30%
+		
+		-- OFFROAD CANCELA DRIFT IMEDIATAMENTE
+		if drifting then
+			cancelDrift()
+		end
 	end
 
 	-- Drift & Hop State Machine
 	if isGrounded then
-		if dk and not drifting and speed > 30 then
+		if dk and not drifting and speed > 30 and not isOnOffroad then
 			yVelocity = CFG.hopHeight
 			if math.abs(str) > 0.1 then
 				drifting = true
@@ -227,23 +270,19 @@ local function updateKart(dt)
 				driftLevel = 0
 			end
 		elseif dk and drifting then
-			-- BRAKE-DRIFTING: Se estiveres a travar durante o drift, reduz muito a velocidade,
-			-- mas não cancela o estado do drift!
 			if braking then
-				speed = speed * 0.95 -- abranda o vetor de velocidade fortemente
+				speed = speed * 0.95
 			end
 			
-			-- SOFT-DRIFTING & Matemática do MT Charge
-			-- Se o analógico estiver > 0.7 para a direção do drift, carregamos a 100%
 			local chargeMult = 0
 			if math.sign(str) == math.sign(driftDir) then
 				if math.abs(str) >= 0.707 then
-					chargeMult = 1.0 -- Soft-drift threshold (diagonal counts as full charge)
+					chargeMult = 1.0 
 				else
 					chargeMult = math.abs(str) / 0.707
 				end
 			else
-				chargeMult = 0.2 -- Virar para o lado oposto quase para o carregamento
+				chargeMult = 0.2 
 			end
 			
 			mtCharge = mtCharge + (CFG.baseChargeRate * chargeMult * dt)
@@ -283,12 +322,11 @@ local function updateKart(dt)
 		end
 	else
 		if not dk and drifting then
-			drifting = false
-			setSparks(0)
+			cancelDrift()
 		end
 	end
 
-	-- Aceleração Padrão (ignorada/sobreposta se a fazer Brake-Drifting)
+	-- Aceleração Padrão
 	if not (drifting and braking) then
 		if acc > 0 then
 			speed = math.min(speed + (CFG.accel * dt), topSpd)
@@ -306,25 +344,19 @@ local function updateKart(dt)
 		speed = speed * effectiveDecel
 	end
 	
-	-- Viragem e Rotação Visual (Tilt)
+	-- Viragem
 	local turnAmt = 0
 	local targetTilt = 0
-	local visualOffsetYaw = 0 -- O "Slip Angle" do kart face à direção real de movimento
+	local visualOffsetYaw = 0 
 	
 	if math.abs(speed) > 2 then
 		if drifting and driftDir ~= 0 then
-			-- 1. O VIÉS BASE (A Âncora)
-			-- Mesmo largando o analógico (str = 0), temos uma rotação obrigatória
 			local baseTurn = driftDir * (CFG.turnSpeed * 0.6)
-			
-			-- O analógico só soma/subtrai a este viés
 			local steerAdjust = str * (CFG.driftTurn * 0.7)
 			turnAmt = baseTurn + steerAdjust
 			
-			-- 2. CLAMPING ESTRITO (O limite mínimo e máximo)
-			-- É proibido o valor chegar a 0. Tens de curvar sempre!
-			local minTurn = CFG.turnSpeed * 0.25 -- Limite Mínimo (Contra-brecagem máxima possível)
-			local maxTurn = CFG.driftTurn * 1.15 -- Limite Máximo (Virar totalmente para dentro)
+			local minTurn = CFG.turnSpeed * 0.25 
+			local maxTurn = CFG.driftTurn * 1.15 
 			
 			if driftDir > 0 then
 				turnAmt = math.clamp(turnAmt, minTurn, maxTurn)
@@ -333,7 +365,6 @@ local function updateKart(dt)
 			end
 			
 			targetTilt = -driftDir * CFG.maxTilt * 1.5 
-			-- SLIP ANGLE: O kart aponta muito mais para a curva do que a direção real em que se move!
 			visualOffsetYaw = -driftDir * math.rad(35) 
 		else
 			turnAmt = str * CFG.turnSpeed
@@ -343,19 +374,14 @@ local function updateKart(dt)
 	
 	currentTilt = currentTilt + (targetTilt - currentTilt) * CFG.tiltSpeed * dt
 
-	-- CÁLCULO DE VETORES DESACOPLADOS (Momentum vs Visual)
 	local right = movementVector:Cross(groundNormal).Unit
 	local newForward = groundNormal:Cross(right).Unit
 	
-	-- 1. Virar o vetor de movimento real
 	local movementTurnRot = CFrame.Angles(0, -turnAmt * dt * math.sign(speed), 0)
 	local movementCF = CFrame.fromMatrix(kartRoot.Position, right, groundNormal, -newForward) * movementTurnRot
-	
 	movementVector = movementCF.LookVector
 	
-	-- 2. Calcular a rotação Visual do Kart (incluindo o Slip Angle e o Tilt)
 	local visualRot = movementCF * CFrame.Angles(0, visualOffsetYaw, currentTilt)
-	
 	kartRoot.CFrame = visualRot
 
 	-- Física Vertical
@@ -377,7 +403,6 @@ local function updateKart(dt)
 		yVelocity = 0
 	end
 
-	-- Aplicar força baseada no VECTOR DE MOVIMENTO (e não no LookVector visual do Kart)
 	kartRoot.AssemblyLinearVelocity = (movementVector * speed) + Vector3.new(0, yVelocity, 0)
 end
 
@@ -389,10 +414,7 @@ local function updateCamera()
 	camera.CameraType = Enum.CameraType.Scriptable
 	
 	local pos = kartRoot.CFrame.Position
-	-- Inclinar a câmara se estiver a fazer drift
 	local driftOffset = drifting and (kartRoot.CFrame.RightVector * (driftDir * -2)) or Vector3.zero
-	
-	-- A câmara segue o vetor de MOVIMENTO real, ou seja, segue o rasto do carro
 	local back = movementVector * -CFG.camDist
 	local desired = pos + back + Vector3.new(0, CFG.camHeight, 0) + driftOffset
 	
@@ -461,4 +483,4 @@ RS.RenderStepped:Connect(function()
 	if kartRoot and kartRoot.Parent then updateCamera() end
 end)
 
-print("[KC] KartController Advanced carregado!")
+print("[KC] KartController Colisoes & Offroad carregado!")
