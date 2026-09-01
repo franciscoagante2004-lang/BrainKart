@@ -20,7 +20,7 @@ local CFG = {
 	decel       = 0.97,   -- desaceleração natural
 	offroadDecel= 0.85,   -- desaceleração extra quando na relva/terra
 	reverseSpd  = 30,     -- velocidade máxima em marcha atrás
-	turnSpeed   = 2.4,    -- agilidade de viragem (mais baixa/suave)
+	turnSpeed   = 1.5,    -- agilidade de viragem (muito suave)
 	
 	-- Tilt Visual (Inclinação)
 	maxTilt     = math.rad(15), 
@@ -67,6 +67,7 @@ local isGrounded = false
 local currentTilt = 0
 local isOnOffroad = false
 local lastBump = 0 -- Cooldown de colisão com parede
+local currentTurnAmt = 0 -- Suavizador de curva
 
 -- Momentum Desacoplado
 local movementVector = Vector3.new(0, 0, -1)
@@ -345,39 +346,47 @@ local function updateKart(dt)
 	end
 	
 	-- Viragem
-	local turnAmt = 0
+	local targetTurnAmt = 0
 	local targetTilt = 0
 	local visualOffsetYaw = 0 
 	
 	if math.abs(speed) > 2 then
 		if drifting and driftDir ~= 0 then
+			-- 1. O VIÉS BASE (A Âncora)
 			local baseTurn = driftDir * (CFG.turnSpeed * 0.6)
-			local steerAdjust = str * (CFG.driftTurn * 0.7)
-			turnAmt = baseTurn + steerAdjust
 			
+			-- O analógico só soma/subtrai a este viés
+			local steerAdjust = str * (CFG.driftTurn * 0.7)
+			targetTurnAmt = baseTurn + steerAdjust
+			
+			-- 2. CLAMPING ESTRITO
 			local minTurn = CFG.turnSpeed * 0.25 
 			local maxTurn = CFG.driftTurn * 1.15 
 			
 			if driftDir > 0 then
-				turnAmt = math.clamp(turnAmt, minTurn, maxTurn)
+				targetTurnAmt = math.clamp(targetTurnAmt, minTurn, maxTurn)
 			else
-				turnAmt = math.clamp(turnAmt, -maxTurn, -minTurn)
+				targetTurnAmt = math.clamp(targetTurnAmt, -maxTurn, -minTurn)
 			end
 			
 			targetTilt = -driftDir * CFG.maxTilt * 1.5 
 			visualOffsetYaw = -driftDir * math.rad(35) 
 		else
-			turnAmt = str * CFG.turnSpeed
+			targetTurnAmt = str * CFG.turnSpeed
 			targetTilt = -str * CFG.maxTilt 
 		end
 	end
+	
+	-- SUAVIZAÇÃO DA CURVA (Interpolamos a força da viragem para não ser instantânea)
+	-- Quanto mais baixo o número multiplicador (ex: 4), mais demora a apertar a curva
+	currentTurnAmt = currentTurnAmt + (targetTurnAmt - currentTurnAmt) * 4 * dt
 	
 	currentTilt = currentTilt + (targetTilt - currentTilt) * CFG.tiltSpeed * dt
 
 	local right = movementVector:Cross(groundNormal).Unit
 	local newForward = groundNormal:Cross(right).Unit
 	
-	local movementTurnRot = CFrame.Angles(0, -turnAmt * dt * math.sign(speed), 0)
+	local movementTurnRot = CFrame.Angles(0, -currentTurnAmt * dt * math.sign(speed), 0)
 	local movementCF = CFrame.fromMatrix(kartRoot.Position, right, groundNormal, -newForward) * movementTurnRot
 	movementVector = movementCF.LookVector
 	
