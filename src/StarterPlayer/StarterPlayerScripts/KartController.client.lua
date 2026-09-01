@@ -122,11 +122,35 @@ local function updateKart(dt)
 	if tick() < stunEnd then speed = speed * 0.88; return end
 
 	local acc, str = 0, 0
+	local dk = false -- drift key
+
+	-- Leitura do teclado
 	if keyDown(Enum.KeyCode.W, Enum.KeyCode.Up)    then acc =  1    end
 	if keyDown(Enum.KeyCode.S, Enum.KeyCode.Down)   then acc = -0.5  end
 	if keyDown(Enum.KeyCode.A, Enum.KeyCode.Left)   then str = -1    end
 	if keyDown(Enum.KeyCode.D, Enum.KeyCode.Right)  then str =  1    end
-	local dk = keyDown(Enum.KeyCode.Space, Enum.KeyCode.LeftShift)
+	if keyDown(Enum.KeyCode.Space, Enum.KeyCode.LeftShift) then dk = true end
+
+	-- Leitura do Comando (Xbox/PS)
+	-- Acelerador (A no Xbox / X na PS)
+	if keyDown(Enum.KeyCode.ButtonA) then acc = 1 end
+	-- Travar/Marcha atrás (B no Xbox / Circulo na PS)
+	if keyDown(Enum.KeyCode.ButtonB) then acc = -0.5 end
+	
+	-- Drift/Hop (RB ou RT / R1 ou R2)
+	if keyDown(Enum.KeyCode.ButtonR1, Enum.KeyCode.ButtonR2) then dk = true end
+	
+	-- Direção Analógica Suave (Thumbstick Esquerdo)
+	local state = UIS:GetGamepadState(Enum.UserInputType.Gamepad1)
+	for _, input in ipairs(state) do
+		if input.KeyCode == Enum.KeyCode.Thumbstick1 then
+			-- input.Position.X vai de -1 (Esquerda) a 1 (Direita)
+			if math.abs(input.Position.X) > 0.15 then -- Deadzone
+				str = input.Position.X
+			end
+			break
+		end
+	end
 
 	local topSpd = CFG.maxSpeed
 	if boosting then
