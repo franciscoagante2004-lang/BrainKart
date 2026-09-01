@@ -313,20 +313,28 @@ local function updateKart(dt)
 	
 	if math.abs(speed) > 2 then
 		if drifting and driftDir ~= 0 then
-			local baseTurn = driftDir * CFG.turnSpeed * 0.7
-			local steerAdjust = str * CFG.driftTurn * 0.8
+			-- 1. O VIÉS BASE (A Âncora)
+			-- Mesmo largando o analógico (str = 0), temos uma rotação obrigatória
+			local baseTurn = driftDir * (CFG.turnSpeed * 0.6)
 			
+			-- O analógico só soma/subtrai a este viés
+			local steerAdjust = str * (CFG.driftTurn * 0.7)
 			turnAmt = baseTurn + steerAdjust
 			
+			-- 2. CLAMPING ESTRITO (O limite mínimo e máximo)
+			-- É proibido o valor chegar a 0. Tens de curvar sempre!
+			local minTurn = CFG.turnSpeed * 0.25 -- Limite Mínimo (Contra-brecagem máxima possível)
+			local maxTurn = CFG.driftTurn * 1.15 -- Limite Máximo (Virar totalmente para dentro)
+			
 			if driftDir > 0 then
-				turnAmt = math.clamp(turnAmt, -CFG.turnSpeed * 0.3, CFG.driftTurn * 1.3)
+				turnAmt = math.clamp(turnAmt, minTurn, maxTurn)
 			else
-				turnAmt = math.clamp(turnAmt, -CFG.driftTurn * 1.3, CFG.turnSpeed * 0.3)
+				turnAmt = math.clamp(turnAmt, -maxTurn, -minTurn)
 			end
 			
 			targetTilt = -driftDir * CFG.maxTilt * 1.5 
 			-- SLIP ANGLE: O kart aponta muito mais para a curva do que a direção real em que se move!
-			visualOffsetYaw = -driftDir * math.rad(30) -- O kart vira 30 graus extra visualmente
+			visualOffsetYaw = -driftDir * math.rad(35) 
 		else
 			turnAmt = str * CFG.turnSpeed
 			targetTilt = -str * CFG.maxTilt 
