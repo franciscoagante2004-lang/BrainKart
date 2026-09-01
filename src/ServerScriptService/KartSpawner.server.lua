@@ -45,12 +45,45 @@ local function getPlayerIdx(player)
 end
 
 local function doSpawnKart(player, char)
-	-- Esperar pelo KartTemplate em ServerStorage
-	local template = SS:WaitForChild("KartTemplate", 30)
+	-- Esperar pelo KartTemplate em ServerStorage, ou criar um de reserva
+	local template = SS:FindFirstChild("KartTemplate")
 	if not template then
-		warn("[KS] KartTemplate nao encontrado em ServerStorage!")
-		warn("[KS] Executa FullRebuildBrainKart.lua no Studio para criar a pista e o kart!")
-		return
+		warn("[KS] KartTemplate nao encontrado! A gerar modelo de reserva...")
+		template = Instance.new("Model")
+		template.Name = "KartTemplate"
+		
+		local root = Instance.new("Part")
+		root.Name = "KartRoot"; root.Size = Vector3.new(5, 2, 8)
+		root.BrickColor = BrickColor.new("Bright red")
+		root.Material = Enum.Material.SmoothPlastic
+		root.CanCollide = true; root.Anchored = false
+		root.Parent = template; template.PrimaryPart = root
+		
+		local function addPart(name, size, bc, cf)
+			local p = Instance.new("Part"); p.Name = name; p.Size = size
+			p.BrickColor = bc; p.Material = Enum.Material.SmoothPlastic
+			p.CanCollide = false; p.Parent = template
+			local w = Instance.new("WeldConstraint")
+			w.Part0 = root; w.Part1 = p; w.Parent = root
+			p.CFrame = root.CFrame * cf
+			return p
+		end
+		
+		addPart("Body", Vector3.new(4.5, 1.5, 5), BrickColor.new("Bright red"), CFrame.new(0, 1.2, -0.5))
+		local ws = addPart("Windshield", Vector3.new(3, 1, 1.5), BrickColor.new("Cyan"), CFrame.new(0, 1.8, -1.2))
+		ws.Material = Enum.Material.Glass; ws.Transparency = 0.4
+		addPart("Spoiler", Vector3.new(4, 0.3, 1.5), BrickColor.new("Dark grey"), CFrame.new(0, 1.5, 3.2))
+		
+		for _, wo in ipairs({{-2.7, -1, 2.5}, {2.7, -1, 2.5}, {-2.7, -1, -2.5}, {2.7, -1, -2.5}}) do
+			local wh = Instance.new("Part"); wh.Shape = Enum.PartType.Cylinder
+			wh.Size = Vector3.new(1.5, 1.8, 1.8); wh.BrickColor = BrickColor.new("Really black")
+			wh.Material = Enum.Material.SmoothPlastic; wh.CanCollide = false; wh.Parent = template
+			local wc = Instance.new("WeldConstraint")
+			wc.Part0 = root; wc.Part1 = wh; wc.Parent = root
+			wh.CFrame = root.CFrame * CFrame.new(wo[1], wo[2], wo[3]) * CFrame.Angles(0, 0, math.pi/2)
+		end
+		
+		template.Parent = SS
 	end
 
 	-- Remover kart antigo
