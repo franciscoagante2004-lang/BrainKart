@@ -1,4 +1,4 @@
--- KartController (StarterPlayerScripts) - Hyper Karts Physics LocalScript
+-- KartController (StarterPlayerScripts) - Advanced MK8 Physics LocalScript
 -- Controlos: W/A/S/D = conduzir | SPACE/LShift = drift+boost | E = item
 
 local Players   = game:GetService("Players")
@@ -11,27 +11,30 @@ local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
 -- ============================================================
--- CONFIGURACAO HYPER KARTS (Base MK8)
+-- CONFIGURACAO HYPER KARTS / MK8 ADVANCED
 -- ============================================================
 local CFG = {
 	accel       = 80,     -- aceleração rápida
 	maxSpeed    = 135,    -- velocidade máxima normal (studs/s)
-	brakeForce  = 0.90,   -- força de travagem
+	brakeForce  = 0.90,   -- força de travagem normal
 	decel       = 0.97,   -- desaceleração natural
 	offroadDecel= 0.85,   -- desaceleração extra quando na relva/terra
 	reverseSpd  = 30,     -- velocidade máxima em marcha atrás
 	turnSpeed   = 3.8,    -- agilidade de viragem (rápida)
 	
-	-- Tilt Visual
-	maxTilt     = math.rad(15), -- quão inclinado o kart fica na curva
-	tiltSpeed   = 6,      -- suavidade da inclinação
+	-- Tilt Visual (Inclinação)
+	maxTilt     = math.rad(15), 
+	tiltSpeed   = 6,      
 	
-	-- Drift & Boost (Mini-Turbos)
+	-- Drift, Momentum & MT (Mini-Turbo)
 	driftTurn   = 5.0,    -- viragem mais apertada durante o drift
 	hopHeight   = 22,     -- força do salto ao iniciar o drift
-	driftMin    = 0.6,    -- tempo mínimo para o nível 1 (Azul)
-	driftMed    = 1.8,    -- tempo mínimo para nível 2 (Laranja)
-	driftMax    = 3.5,    -- tempo mínimo para nível 3 (Rosa)
+	
+	-- Mini-Turbo Charge (frames/pontos por segundo em vez de apenas tempo)
+	baseChargeRate = 1.0,
+	mtThreshold1 = 0.6,    -- Limiar Azul
+	mtThreshold2 = 1.8,    -- Limiar Laranja
+	mtThreshold3 = 3.5,    -- Limiar Rosa (Ultra)
 	
 	boostSpds   = { 170, 205, 255 }, -- velocidades de boost (Azul, Laranja, Rosa)
 	boostDurs   = { 0.8, 1.8, 3.2 }, -- durações de boost
@@ -54,7 +57,8 @@ local CFG = {
 local kart, kartRoot = nil, nil
 local speed          = 0
 local yVelocity      = 0
-local drifting, driftDir, driftTime, driftLevel = false, 0, 0, 0
+local drifting, driftDir = false, 0
+local mtCharge, driftLevel = 0, 0
 local boosting, boostEnd, currentBoostSpeed = false, 0, 0
 local enabled  = false  -- so ativa apos GO!
 local stunEnd  = 0
@@ -62,6 +66,9 @@ local groundNormal = Vector3.new(0, 1, 0)
 local isGrounded = false
 local currentTilt = 0
 local isOnOffroad = false
+
+-- Momentum Desacoplado
+local movementVector = Vector3.new(0, 0, -1)
 
 -- Referências para as faíscas
 local sparkEmitters = {}
@@ -124,7 +131,7 @@ local function setSparks(level)
 end
 
 -- ============================================================
--- FISICAS DO KART (HYPER KARTS)
+-- FISICAS DO KART (ADVANCED MK8)
 -- ============================================================
 local function updateKart(dt)
 	if not kartRoot then return end
@@ -132,24 +139,29 @@ local function updateKart(dt)
 
 	local acc, str = 0, 0
 	local dk = false -- drift key
+	local braking = false
 
 	-- Leitura do teclado
 	if keyDown(Enum.KeyCode.W, Enum.KeyCode.Up)    then acc =  1    end
-	if keyDown(Enum.KeyCode.S, Enum.KeyCode.Down)   then acc = -0.5  end
+	if keyDown(Enum.KeyCode.S, Enum.KeyCode.Down)   then 
+		acc = -0.5
+		braking = true 
+	end
 	if keyDown(Enum.KeyCode.A, Enum.KeyCode.Left)   then str = -1    end
 	if keyDown(Enum.KeyCode.D, Enum.KeyCode.Right)  then str =  1    end
 	if keyDown(Enum.KeyCode.Space, Enum.KeyCode.LeftShift) then dk = true end
 
-	-- Leitura do Comando (Xbox/PS) usando o estado correto do Gamepad
+	-- Leitura do Comando (Xbox/PS)
 	local gamepads = UIS:GetConnectedGamepads()
 	if #gamepads > 0 then
-		local gp = gamepads[1] -- Usar o primeiro comando ligado
+		local gp = gamepads[1]
 		local state = UIS:GetGamepadState(gp)
 		for _, input in ipairs(state) do
 			if input.KeyCode == Enum.KeyCode.ButtonB and input.UserInputState == Enum.UserInputState.Begin then
 				acc = 1
 			elseif input.KeyCode == Enum.KeyCode.ButtonA and input.UserInputState == Enum.UserInputState.Begin then
 				acc = -0.5
+				braking = true
 			elseif (input.KeyCode == Enum.KeyCode.ButtonR1 or input.KeyCode == Enum.KeyCode.ButtonR2) and input.UserInputState == Enum.UserInputState.Begin then
 				dk = true
 			elseif input.KeyCode == Enum.KeyCode.Thumbstick1 then
@@ -188,7 +200,7 @@ local function updateKart(dt)
 		isGrounded = true
 		groundNormal = groundNormal:Lerp(rResult.Normal, 15 * dt).Unit
 		
-		-- Detetar Relva ou Areia (Off-road)
+		-- Detetar Off-road
 		if rResult.Material == Enum.Material.Grass or rResult.Material == Enum.Material.Sand or rResult.Material == Enum.Material.LeafyGrass then
 			isOnOffroad = true
 		end
@@ -197,23 +209,49 @@ local function updateKart(dt)
 		groundNormal = groundNormal:Lerp(Vector3.new(0, 1, 0), 5 * dt).Unit
 	end
 
-	-- Drift & Hop
+	-- Penalidade Off-road
+	local effectiveDecel = CFG.decel
+	if isOnOffroad and not boosting then
+		effectiveDecel = CFG.offroadDecel
+		topSpd = topSpd * 0.4 
+	end
+
+	-- Drift & Hop State Machine
 	if isGrounded then
 		if dk and not drifting and speed > 30 then
 			yVelocity = CFG.hopHeight
-			-- Só entra em drift se o jogador estiver a tentar virar no momento do salto
 			if math.abs(str) > 0.1 then
 				drifting = true
 				driftDir = math.sign(str)
-				driftTime = 0
+				mtCharge = 0
 				driftLevel = 0
 			end
 		elseif dk and drifting then
-			driftTime = driftTime + dt
+			-- BRAKE-DRIFTING: Se estiveres a travar durante o drift, reduz muito a velocidade,
+			-- mas não cancela o estado do drift!
+			if braking then
+				speed = speed * 0.95 -- abranda o vetor de velocidade fortemente
+			end
+			
+			-- SOFT-DRIFTING & Matemática do MT Charge
+			-- Se o analógico estiver > 0.7 para a direção do drift, carregamos a 100%
+			local chargeMult = 0
+			if math.sign(str) == math.sign(driftDir) then
+				if math.abs(str) >= 0.707 then
+					chargeMult = 1.0 -- Soft-drift threshold (diagonal counts as full charge)
+				else
+					chargeMult = math.abs(str) / 0.707
+				end
+			else
+				chargeMult = 0.2 -- Virar para o lado oposto quase para o carregamento
+			end
+			
+			mtCharge = mtCharge + (CFG.baseChargeRate * chargeMult * dt)
+			
 			local newLevel = 0
-			if driftTime >= CFG.driftMax then newLevel = 3
-			elseif driftTime >= CFG.driftMed then newLevel = 2
-			elseif driftTime >= CFG.driftMin then newLevel = 1 end
+			if mtCharge >= CFG.mtThreshold3 then newLevel = 3
+			elseif mtCharge >= CFG.mtThreshold2 then newLevel = 2
+			elseif mtCharge >= CFG.mtThreshold1 then newLevel = 1 end
 			
 			if newLevel ~= driftLevel then
 				driftLevel = newLevel
@@ -250,99 +288,89 @@ local function updateKart(dt)
 		end
 	end
 
-	-- Penalidade Off-road (abrandar muito se não estiver em boost)
-	local effectiveDecel = CFG.decel
-	if isOnOffroad and not boosting then
-		effectiveDecel = CFG.offroadDecel
-		topSpd = topSpd * 0.4 -- Velocidade máxima baixa na relva
-	end
-
-	-- Aceleração e Velocidade
-	if acc > 0 then
-		speed = math.min(speed + (CFG.accel * dt), topSpd)
-	elseif acc < 0 then
-		speed = speed > 2 
-			and speed * CFG.brakeForce 
-			or math.max(speed + (acc * CFG.accel * dt * 0.5), -CFG.reverseSpd)
-	else
-		speed = speed * effectiveDecel
-		if math.abs(speed) < 1 then speed = 0 end
+	-- Aceleração Padrão (ignorada/sobreposta se a fazer Brake-Drifting)
+	if not (drifting and braking) then
+		if acc > 0 then
+			speed = math.min(speed + (CFG.accel * dt), topSpd)
+		elseif acc < 0 then
+			speed = speed > 2 
+				and speed * CFG.brakeForce 
+				or math.max(speed + (acc * CFG.accel * dt * 0.5), -CFG.reverseSpd)
+		else
+			speed = speed * effectiveDecel
+			if math.abs(speed) < 1 then speed = 0 end
+		end
 	end
 	
-	-- Se estiver no off-road, forçar redução de velocidade rapidamente
 	if isOnOffroad and not boosting and speed > topSpd then
 		speed = speed * effectiveDecel
 	end
 	
-	-- Viragem e Inclinação (Tilt)
+	-- Viragem e Rotação Visual (Tilt)
 	local turnAmt = 0
 	local targetTilt = 0
+	local visualOffsetYaw = 0 -- O "Slip Angle" do kart face à direção real de movimento
 	
 	if math.abs(speed) > 2 then
 		if drifting and driftDir ~= 0 then
-			-- No Mario Kart, o drift puxa-te naturalmente na direção da curva.
-			-- Se virares na mesma direção, curvas muito mais apertado.
-			-- Se virares na direção oposta, a curva abre bastante.
-			
-			local baseTurn = driftDir * CFG.turnSpeed * 0.6
+			local baseTurn = driftDir * CFG.turnSpeed * 0.7
 			local steerAdjust = str * CFG.driftTurn * 0.8
 			
 			turnAmt = baseTurn + steerAdjust
 			
-			-- Limitar a viragem para que não faças a curva ao contrário
 			if driftDir > 0 then
 				turnAmt = math.clamp(turnAmt, -CFG.turnSpeed * 0.3, CFG.driftTurn * 1.3)
 			else
 				turnAmt = math.clamp(turnAmt, -CFG.driftTurn * 1.3, CFG.turnSpeed * 0.3)
 			end
 			
-			targetTilt = -driftDir * CFG.maxTilt * 1.5 -- Inclinar bastante durante drift
+			targetTilt = -driftDir * CFG.maxTilt * 1.5 
+			-- SLIP ANGLE: O kart aponta muito mais para a curva do que a direção real em que se move!
+			visualOffsetYaw = -driftDir * math.rad(30) -- O kart vira 30 graus extra visualmente
 		else
 			turnAmt = str * CFG.turnSpeed
-			targetTilt = -str * CFG.maxTilt -- Inclinar ligeiramente a curvar normal
+			targetTilt = -str * CFG.maxTilt 
 		end
 	end
 	
-	-- Suavizar a inclinação visual
 	currentTilt = currentTilt + (targetTilt - currentTilt) * CFG.tiltSpeed * dt
 
-	-- Rotação e Alinhamento com a pista
-	local forward = kartRoot.CFrame.LookVector
-	local right = forward:Cross(groundNormal).Unit
+	-- CÁLCULO DE VETORES DESACOPLADOS (Momentum vs Visual)
+	local right = movementVector:Cross(groundNormal).Unit
 	local newForward = groundNormal:Cross(right).Unit
 	
-	-- Aplicar a viragem à nova orientação
-	local turnRot = CFrame.Angles(0, -turnAmt * dt * math.sign(speed), 0)
+	-- 1. Virar o vetor de movimento real
+	local movementTurnRot = CFrame.Angles(0, -turnAmt * dt * math.sign(speed), 0)
+	local movementCF = CFrame.fromMatrix(kartRoot.Position, right, groundNormal, -newForward) * movementTurnRot
 	
-	-- Aplicar a inclinação (Tilt visual no eixo Z)
-	local targetCF = CFrame.fromMatrix(kartRoot.Position, right, groundNormal, -newForward) * turnRot * CFrame.Angles(0, 0, currentTilt)
+	movementVector = movementCF.LookVector
 	
-	kartRoot.CFrame = targetCF
+	-- 2. Calcular a rotação Visual do Kart (incluindo o Slip Angle e o Tilt)
+	local visualRot = movementCF * CFrame.Angles(0, visualOffsetYaw, currentTilt)
+	
+	kartRoot.CFrame = visualRot
 
-	-- Física Vertical (Hop & Downforce)
+	-- Física Vertical
 	if isGrounded then
 		if yVelocity <= 0 then
-			-- Snap to ground
 			kartRoot.CFrame = kartRoot.CFrame - Vector3.new(0, kartRoot.Position.Y - (rResult.Position.Y + CFG.rideHeight), 0)
 			yVelocity = 0
 		else
-			-- Subindo no salto
 			yVelocity = yVelocity - (CFG.downForce * dt)
 		end
 	else
-		-- Gravidade no ar
 		yVelocity = yVelocity - (CFG.downForce * dt)
 	end
 	
-	-- Se cair do mapa
 	if kartRoot.Position.Y < -50 then
 		kartRoot.CFrame = CFrame.new(0, 10, 0)
+		movementVector = Vector3.new(0, 0, -1)
 		speed = 0
 		yVelocity = 0
 	end
 
-	-- Aplicar força física final
-	kartRoot.AssemblyLinearVelocity = (kartRoot.CFrame.LookVector * speed) + Vector3.new(0, yVelocity, 0)
+	-- Aplicar força baseada no VECTOR DE MOVIMENTO (e não no LookVector visual do Kart)
+	kartRoot.AssemblyLinearVelocity = (movementVector * speed) + Vector3.new(0, yVelocity, 0)
 end
 
 -- ============================================================
@@ -356,7 +384,8 @@ local function updateCamera()
 	-- Inclinar a câmara se estiver a fazer drift
 	local driftOffset = drifting and (kartRoot.CFrame.RightVector * (driftDir * -2)) or Vector3.zero
 	
-	local back = kartRoot.CFrame.LookVector * -CFG.camDist
+	-- A câmara segue o vetor de MOVIMENTO real, ou seja, segue o rasto do carro
+	local back = movementVector * -CFG.camDist
 	local desired = pos + back + Vector3.new(0, CFG.camHeight, 0) + driftOffset
 	
 	camera.CFrame = camera.CFrame:Lerp(
@@ -374,8 +403,9 @@ local function waitForKart()
 		kart, kartRoot = findKart()
 		if kartRoot then
 			speed = 0
+			movementVector = kartRoot.CFrame.LookVector
 			setupSparks()
-			print("[KC] Kart Hyper/MK8 encontrado: " .. kart.Name)
+			print("[KC] Kart Advanced MK8 encontrado: " .. kart.Name)
 		else
 			attempts = attempts + 1
 			task.wait(0.5)
@@ -423,4 +453,4 @@ RS.RenderStepped:Connect(function()
 	if kartRoot and kartRoot.Parent then updateCamera() end
 end)
 
-print("[KC] KartController Hyper Karts carregado!")
+print("[KC] KartController Advanced carregado!")
