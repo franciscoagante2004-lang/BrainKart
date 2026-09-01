@@ -19,16 +19,6 @@
     "StarterGui": {
       "$className": "StarterGui",
       "$path": "src/StarterGui"
-    },
-
-    "ReplicatedStorage": {
-      "$className": "ReplicatedStorage",
-      "$path": "src/ReplicatedStorage"
-    },
-
-    "ServerStorage": {
-      "$className": "ServerStorage",
-      "$path": "src/ServerStorage"
     }
   }
 }
