@@ -20,14 +20,14 @@ local CFG = {
 	decel       = 0.97,   -- desaceleração natural
 	offroadDecel= 0.85,   -- desaceleração extra quando na relva/terra
 	reverseSpd  = 30,     -- velocidade máxima em marcha atrás
-	turnSpeed   = 3.8,    -- agilidade de viragem (rápida)
+	turnSpeed   = 2.4,    -- agilidade de viragem (mais baixa/suave)
 	
 	-- Tilt Visual (Inclinação)
 	maxTilt     = math.rad(15), 
 	tiltSpeed   = 6,      
 	
 	-- Drift, Momentum & MT (Mini-Turbo)
-	driftTurn   = 5.0,    -- viragem mais apertada durante o drift
+	driftTurn   = 3.6,    -- viragem mais apertada durante o drift
 	hopHeight   = 22,     -- força do salto ao iniciar o drift
 	
 	-- Mini-Turbo Charge
