@@ -131,24 +131,23 @@ local function updateKart(dt)
 	if keyDown(Enum.KeyCode.D, Enum.KeyCode.Right)  then str =  1    end
 	if keyDown(Enum.KeyCode.Space, Enum.KeyCode.LeftShift) then dk = true end
 
-	-- Leitura do Comando (Xbox/PS)
-	-- Acelerador (A no Xbox / X na PS)
-	if keyDown(Enum.KeyCode.ButtonA) then acc = 1 end
-	-- Travar/Marcha atrás (B no Xbox / Circulo na PS)
-	if keyDown(Enum.KeyCode.ButtonB) then acc = -0.5 end
-	
-	-- Drift/Hop (RB ou RT / R1 ou R2)
-	if keyDown(Enum.KeyCode.ButtonR1, Enum.KeyCode.ButtonR2) then dk = true end
-	
-	-- Direção Analógica Suave (Thumbstick Esquerdo)
-	local state = UIS:GetGamepadState(Enum.UserInputType.Gamepad1)
-	for _, input in ipairs(state) do
-		if input.KeyCode == Enum.KeyCode.Thumbstick1 then
-			-- input.Position.X vai de -1 (Esquerda) a 1 (Direita)
-			if math.abs(input.Position.X) > 0.15 then -- Deadzone
-				str = input.Position.X
+	-- Leitura do Comando (Xbox/PS) usando o estado correto do Gamepad
+	local gamepads = UIS:GetConnectedGamepads()
+	if #gamepads > 0 then
+		local gp = gamepads[1] -- Usar o primeiro comando ligado
+		local state = UIS:GetGamepadState(gp)
+		for _, input in ipairs(state) do
+			if input.KeyCode == Enum.KeyCode.ButtonA and input.UserInputState == Enum.UserInputState.Begin then
+				acc = 1
+			elseif input.KeyCode == Enum.KeyCode.ButtonB and input.UserInputState == Enum.UserInputState.Begin then
+				acc = -0.5
+			elseif (input.KeyCode == Enum.KeyCode.ButtonR1 or input.KeyCode == Enum.KeyCode.ButtonR2) and input.UserInputState == Enum.UserInputState.Begin then
+				dk = true
+			elseif input.KeyCode == Enum.KeyCode.Thumbstick1 then
+				if math.abs(input.Position.X) > 0.15 then
+					str = input.Position.X
+				end
 			end
-			break
 		end
 	end
 
@@ -263,8 +262,8 @@ local function updateKart(dt)
 
 	-- Rotação e Alinhamento com a pista
 	local forward = kartRoot.CFrame.LookVector
-	local right = groundNormal:Cross(forward).Unit
-	local newForward = right:Cross(groundNormal).Unit
+	local right = forward:Cross(groundNormal).Unit
+	local newForward = groundNormal:Cross(right).Unit
 	
 	-- Aplicar a viragem à nova orientação
 	local turnRot = CFrame.Angles(0, -turnAmt * dt * math.sign(speed), 0)
