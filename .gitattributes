@@ -1,0 +1,5 @@
+﻿# Normalizar line endings
+* text=auto
+*.lua text eol=lf
+*.json text eol=lf
+*.md text eol=lf
