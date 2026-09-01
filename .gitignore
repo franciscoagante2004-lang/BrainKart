@@ -1,0 +1,23 @@
+# Roblox - binarios (nao versionar, usa os .lua em vez disso)
+*.rbxl
+*.rbxlx
+*.rbxm
+*.rbxmx
+
+# Rojo - ficheiros gerados automaticamente
+.rojo-sourcemap.json
+sourcemap.json
+
+# VS Code
+.vscode/
+
+# Sistema
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Node (se usares ferramentas Node)
+node_modules/
+
+# Luau tipo-checking (gerado automaticamente)
+*.d.lua
