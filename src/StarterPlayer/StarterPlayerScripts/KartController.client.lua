@@ -384,7 +384,7 @@ local function updateKart(dt)
 		yVelocity = yVelocity - (CFG.downForce * dt)
 	end
 	
-	if kartRoot.Position.Y < -50 then
+	if kartRoot.Position.Y < -300 then
 		kartRoot.CFrame = CFrame.new(0, 10, 0)
 		visualForward = Vector3.new(0, 0, -1)
 		movementVector = visualForward
