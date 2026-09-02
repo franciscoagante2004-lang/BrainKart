@@ -50,21 +50,18 @@ local function checkFinishLineCrossing(player, kartRoot, finishPart)
 
 	-- Posição do kart relativa à meta (no espaço local da meta)
 	local relPos = finishPart.CFrame:PointToObjectSpace(kartRoot.Position)
+	local prevZ = d.prevZ or relPos.Z
+	d.prevZ = relPos.Z
 
-	-- relPos.Z < 0 = atrás da meta, relPos.Z > 0 = à frente
-	-- Só conta se o kart está perto da meta (X e Y dentro dos limites) e passou pelo plano
-	local halfX = finishPart.Size.X / 2
-	local halfY = finishPart.Size.Y / 2
-
+	-- Limites de largura (X) e altura (Y) com margem generosa
+	local halfX = (finishPart.Size.X / 2) + 40
+	local halfY = (finishPart.Size.Y / 2) + 40
 	local inBounds = math.abs(relPos.X) < halfX and math.abs(relPos.Y) < halfY
 
 	if not inBounds then return end
 
-	local prevZ = d.prevZ or relPos.Z
-	d.prevZ = relPos.Z
-
-	-- Cruzamento: de positivo para negativo (vai para a frente passando pela meta)
-	if prevZ > 0.5 and relPos.Z < -0.5 then
+	-- Cruzamento do plano da meta (de trás/positivo para à frente/negativo)
+	if prevZ > 0 and relPos.Z <= 2 then
 		local now = tick()
 		if (now - (d.lastCrossed or 0)) < COOLDOWN then return end
 		d.lastCrossed = now
