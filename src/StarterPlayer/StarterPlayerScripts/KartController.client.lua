@@ -404,32 +404,6 @@ local function updateKart(dt)
 	
 	local modelRot = CFrame.fromMatrix(kartRoot.Position, right, groundNormal, -visualForward)
 	kartRoot.CFrame = modelRot * CFrame.Angles(0, visualOffsetYaw, currentTilt)
-	
-	-- Animar Rodas da Frente (Steering)
-	local sFL = kartRoot:FindFirstChild("SteeringFL")
-	local sFR = kartRoot:FindFirstChild("SteeringFR")
-	if sFL and not sFL:GetAttribute("OrigC0X") then 
-		local c0 = sFL.C0
-		sFL:SetAttribute("OrigC0X", c0.X); sFL:SetAttribute("OrigC0Y", c0.Y); sFL:SetAttribute("OrigC0Z", c0.Z)
-		local rx, ry, rz = c0:ToEulerAnglesXYZ()
-		sFL:SetAttribute("OrigC0RX", rx); sFL:SetAttribute("OrigC0RY", ry); sFL:SetAttribute("OrigC0RZ", rz)
-	end
-	if sFR and not sFR:GetAttribute("OrigC0X") then 
-		local c0 = sFR.C0
-		sFR:SetAttribute("OrigC0X", c0.X); sFR:SetAttribute("OrigC0Y", c0.Y); sFR:SetAttribute("OrigC0Z", c0.Z)
-		local rx, ry, rz = c0:ToEulerAnglesXYZ()
-		sFR:SetAttribute("OrigC0RX", rx); sFR:SetAttribute("OrigC0RY", ry); sFR:SetAttribute("OrigC0RZ", rz)
-	end
-	
-	local wheelAngle = -currentSteer * math.rad(35)
-	if sFL then
-		local orig = CFrame.new(sFL:GetAttribute("OrigC0X"), sFL:GetAttribute("OrigC0Y"), sFL:GetAttribute("OrigC0Z")) * CFrame.Angles(sFL:GetAttribute("OrigC0RX"), sFL:GetAttribute("OrigC0RY"), sFL:GetAttribute("OrigC0RZ"))
-		sFL.C0 = orig * CFrame.Angles(0, wheelAngle, 0)
-	end
-	if sFR then
-		local orig = CFrame.new(sFR:GetAttribute("OrigC0X"), sFR:GetAttribute("OrigC0Y"), sFR:GetAttribute("OrigC0Z")) * CFrame.Angles(sFR:GetAttribute("OrigC0RX"), sFR:GetAttribute("OrigC0RY"), sFR:GetAttribute("OrigC0RZ"))
-		sFR.C0 = orig * CFrame.Angles(0, wheelAngle, 0)
-	end
 
 	-- Física Vertical
 	if isGrounded then
