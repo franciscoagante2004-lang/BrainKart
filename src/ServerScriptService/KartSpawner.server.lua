@@ -106,7 +106,7 @@ local function doSpawnKart(player, char)
 	local spCF = sp and sp.CFrame or CFrame.new(0, 8, 100)
 
 	kc.Name = player.Name .. "Kart"
-	kc:SetPrimaryPartCFrame(spCF + Vector3.new(0, 3, 0))
+	kc:SetPrimaryPartCFrame(spCF + Vector3.new(0, 5, 0))
 	kc.Parent = workspace
 
 	-- Aguardar personagem estar completamente carregado

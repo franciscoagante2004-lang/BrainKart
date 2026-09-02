@@ -1,4 +1,4 @@
--- HudScript (StarterGui > RaceHUDGui) - MK8 Authentic Overlay
+-- HudScript (StarterGui > RaceHUDGui) - MK8 Authentic Overlay v2
 local Players           = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService        = game:GetService("RunService")
@@ -53,8 +53,8 @@ end
 local itemContainer = Instance.new("Frame")
 itemContainer.Name = "ItemContainer"
 itemContainer.Size = UDim2.new(0, 160, 0, 160)
-itemContainer.Position = UDim2.new(0, 30, 0, 50) -- Ligeiramente abaixo do menu do Roblox
-itemContainer.BackgroundTransparency = 1 -- 100% invisível (sem fundo quadrado)
+itemContainer.Position = UDim2.new(0, 30, 0, 50)
+itemContainer.BackgroundTransparency = 1 -- 100% invisível
 itemContainer.Parent = sg
 
 -- Primary Main Item Slot (Held)
@@ -123,40 +123,30 @@ subIcon.Parent = subSlot
 
 
 -- ============================================================
--- 2. BOTTOM-LEFT: COINS & LAPS PANEL (PILULA TRANSLUCIDA MK8)
+-- 2. BOTTOM-LEFT: COINS & LAPS (DOIS PILULAS SEPARADAS - MK8 EXACT)
 -- ============================================================
-local infoPanel = Instance.new("Frame")
-infoPanel.Name = "CoinsAndLapPanel"
-infoPanel.Size = UDim2.new(0, 230, 0, 52)
-infoPanel.Position = UDim2.new(0, 35, 1, -85)
-infoPanel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-infoPanel.BackgroundTransparency = 0.45 -- Translúcido limpo exatamente como MK8
-infoPanel.BorderSizePixel = 0
-infoPanel.ZIndex = 3
-infoPanel.Parent = sg
-addCorner(infoPanel, 16)
+-- ─── COIN PILL ───
+local coinPill = Instance.new("Frame")
+coinPill.Name = "CoinPill"
+coinPill.Size = UDim2.new(0, 108, 0, 48)
+coinPill.Position = UDim2.new(0, 35, 1, -80)
+coinPill.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+coinPill.BackgroundTransparency = 0.45
+coinPill.BorderSizePixel = 0
+coinPill.ZIndex = 3
+coinPill.Parent = sg
+addCorner(coinPill, 16)
+addStroke(coinPill, Color3.fromRGB(70, 75, 85), 1.5)
 
-local panelStroke = addStroke(infoPanel, Color3.fromRGB(70, 75, 85), 1.5)
-
--- ─── COIN SECTION ───
-local coinSection = Instance.new("Frame")
-coinSection.Name = "CoinSection"
-coinSection.Size = UDim2.new(0.48, 0, 1, 0)
-coinSection.Position = UDim2.new(0, 0, 0, 0)
-coinSection.BackgroundTransparency = 1
-coinSection.ZIndex = 4
-coinSection.Parent = infoPanel
-
--- Solid Yellow Coin Icon
+-- Solid Yellow Coin Badge
 local coinBadge = Instance.new("Frame")
 coinBadge.Size = UDim2.new(0, 28, 0, 28)
-coinBadge.Position = UDim2.new(0, 14, 0.5, -14)
+coinBadge.Position = UDim2.new(0, 12, 0.5, -14)
 coinBadge.BackgroundColor3 = Color3.fromRGB(255, 205, 0)
 coinBadge.ZIndex = 5
-coinBadge.Parent = coinSection
+coinBadge.Parent = coinPill
 addCorner(coinBadge, 14)
-
-local coinStroke = addStroke(coinBadge, Color3.fromRGB(180, 130, 0), 2)
+addStroke(coinBadge, Color3.fromRGB(180, 130, 0), 2)
 
 local coinDetail = Instance.new("TextLabel")
 coinDetail.Size = UDim2.new(1, 0, 1, 0)
@@ -168,11 +158,10 @@ coinDetail.TextColor3 = Color3.fromRGB(160, 95, 0)
 coinDetail.ZIndex = 6
 coinDetail.Parent = coinBadge
 
--- Coin Count Text
 local coinLabel = Instance.new("TextLabel")
 coinLabel.Name = "CoinCount"
 coinLabel.Size = UDim2.new(0, 55, 1, 0)
-coinLabel.Position = UDim2.new(0, 48, 0, 0)
+coinLabel.Position = UDim2.new(0, 46, 0, 0)
 coinLabel.BackgroundTransparency = 1
 coinLabel.Text = "00"
 coinLabel.Font = Enum.Font.FredokaOne
@@ -180,45 +169,35 @@ coinLabel.TextSize = 26
 coinLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 coinLabel.TextXAlignment = Enum.TextXAlignment.Left
 coinLabel.ZIndex = 5
-coinLabel.Parent = coinSection
+coinLabel.Parent = coinPill
+addStroke(coinLabel, Color3.fromRGB(0, 0, 0), 3, Enum.ApplyStrokeMode.Contextual)
 
-local coinTextStroke = addStroke(coinLabel, Color3.fromRGB(0, 0, 0), 3, Enum.ApplyStrokeMode.Contextual)
+-- ─── LAP PILL (SEPARADO, SEM BARRA) ───
+local lapPill = Instance.new("Frame")
+lapPill.Name = "LapPill"
+lapPill.Size = UDim2.new(0, 108, 0, 48)
+lapPill.Position = UDim2.new(0, 150, 1, -80)
+lapPill.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+lapPill.BackgroundTransparency = 0.45
+lapPill.BorderSizePixel = 0
+lapPill.ZIndex = 3
+lapPill.Parent = sg
+addCorner(lapPill, 16)
+addStroke(lapPill, Color3.fromRGB(70, 75, 85), 1.5)
 
--- ─── SLANTED DIVIDER ───
-local sepBar = Instance.new("TextLabel")
-sepBar.Size = UDim2.new(0, 15, 1, 0)
-sepBar.Position = UDim2.new(0.46, 0, 0, 0)
-sepBar.BackgroundTransparency = 1
-sepBar.Text = "/"
-sepBar.Font = Enum.Font.FredokaOne
-sepBar.TextSize = 22
-sepBar.TextColor3 = Color3.fromRGB(180, 185, 200)
-sepBar.ZIndex = 5
-sepBar.Parent = infoPanel
-
--- ─── LAP SECTION ───
-local lapSection = Instance.new("Frame")
-lapSection.Name = "LapSection"
-lapSection.Size = UDim2.new(0.5, 0, 1, 0)
-lapSection.Position = UDim2.new(0.5, 0, 0, 0)
-lapSection.BackgroundTransparency = 1
-lapSection.ZIndex = 4
-lapSection.Parent = infoPanel
-
--- Checkered Flag Graphic
 local flagIcon = Instance.new("TextLabel")
 flagIcon.Size = UDim2.new(0, 28, 0, 28)
-flagIcon.Position = UDim2.new(0, 10, 0.5, -14)
+flagIcon.Position = UDim2.new(0, 12, 0.5, -14)
 flagIcon.BackgroundTransparency = 1
 flagIcon.Text = "🏁"
 flagIcon.TextSize = 22
 flagIcon.ZIndex = 5
-flagIcon.Parent = lapSection
+flagIcon.Parent = lapPill
 
 local lapLabel = Instance.new("TextLabel")
 lapLabel.Name = "LapCount"
-lapLabel.Size = UDim2.new(0, 65, 1, 0)
-lapLabel.Position = UDim2.new(0, 42, 0, 0)
+lapLabel.Size = UDim2.new(0, 60, 1, 0)
+lapLabel.Position = UDim2.new(0, 44, 0, 0)
 lapLabel.BackgroundTransparency = 1
 lapLabel.Text = "1/3"
 lapLabel.Font = Enum.Font.FredokaOne
@@ -226,9 +205,8 @@ lapLabel.TextSize = 26
 lapLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 lapLabel.TextXAlignment = Enum.TextXAlignment.Left
 lapLabel.ZIndex = 5
-lapLabel.Parent = lapSection
-
-local lapTextStroke = addStroke(lapLabel, Color3.fromRGB(0, 0, 0), 3, Enum.ApplyStrokeMode.Contextual)
+lapLabel.Parent = lapPill
+addStroke(lapLabel, Color3.fromRGB(0, 0, 0), 3, Enum.ApplyStrokeMode.Contextual)
 
 
 -- ============================================================
@@ -242,7 +220,7 @@ rankContainer.BackgroundTransparency = 1
 rankContainer.ZIndex = 4
 rankContainer.Parent = sg
 
--- Big Skewed Position Number (Flutuante sem círculo de fundo)
+-- Big Skewed Position Number (Flutuante sem fundo)
 local rankNumLabel = Instance.new("TextLabel")
 rankNumLabel.Name = "RankNum"
 rankNumLabel.Size = UDim2.new(0, 110, 1, 0)
@@ -255,8 +233,7 @@ rankNumLabel.TextColor3 = Color3.fromRGB(255, 165, 0)
 rankNumLabel.TextXAlignment = Enum.TextXAlignment.Right
 rankNumLabel.ZIndex = 5
 rankNumLabel.Parent = rankContainer
-
-local rankNumStroke = addStroke(rankNumLabel, Color3.fromRGB(10, 10, 15), 6.5, Enum.ApplyStrokeMode.Contextual)
+addStroke(rankNumLabel, Color3.fromRGB(10, 10, 15), 6.5, Enum.ApplyStrokeMode.Contextual)
 
 -- Position Suffix ("st", "nd", "rd", "th")
 local rankSuffixLabel = Instance.new("TextLabel")
@@ -271,8 +248,7 @@ rankSuffixLabel.TextColor3 = Color3.fromRGB(255, 195, 40)
 rankSuffixLabel.TextXAlignment = Enum.TextXAlignment.Left
 rankSuffixLabel.ZIndex = 5
 rankSuffixLabel.Parent = rankContainer
-
-local rankSuffixStroke = addStroke(rankSuffixLabel, Color3.fromRGB(10, 10, 15), 4.5, Enum.ApplyStrokeMode.Contextual)
+addStroke(rankSuffixLabel, Color3.fromRGB(10, 10, 15), 4.5, Enum.ApplyStrokeMode.Contextual)
 
 -- Dynamic Color Gradients according to Rank
 local function updateRankDisplay(rankNumber)
@@ -312,7 +288,6 @@ local function updateRankDisplay(rankNumber)
 			ColorSequenceKeypoint.new(1.0, Color3.fromRGB(190, 65, 0)),
 		})
 	end
-
 	addGradient(rankNumLabel, seq, 85)
 	addGradient(rankSuffixLabel, seq, 85)
 end
@@ -320,7 +295,7 @@ updateRankDisplay(1)
 
 
 -- ============================================================
--- 4. CENTER: COUNTDOWN & LAP NOTIFICATIONS
+-- 4. CENTER: COUNTDOWN (SOME APÓS O GO!) & NOTIFICATIONS
 -- ============================================================
 local cdLabel = Instance.new("TextLabel")
 cdLabel.Name = "CountdownLabel"
@@ -342,7 +317,7 @@ addGradient(cdLabel, ColorSequence.new({
 	ColorSequenceKeypoint.new(1.0, Color3.fromRGB(255, 160, 0)),
 }), 90)
 
--- Lap Banner Notification Frame
+-- Banner de notificação de volta
 local bannerFrame = Instance.new("Frame")
 bannerFrame.Name = "LapBanner"
 bannerFrame.Size = UDim2.new(0, 440, 0, 84)
@@ -425,8 +400,17 @@ RF:WaitForChild("Countdown", 10).OnClientEvent:Connect(function(count)
 	)
 	pop:Play()
 	
-	TweenService:Create(cdLabel, TweenInfo.new(0.9), { TextTransparency = 1 }):Play()
-	TweenService:Create(cdStroke, TweenInfo.new(0.9), { Transparency = 1 }):Play()
+	local fade = TweenService:Create(cdLabel, TweenInfo.new(0.9), { TextTransparency = 1 })
+	fade:Play()
+	
+	-- Limpar texto completamente após desaparecer para não ficar preso no ecrã
+	task.delay(1.2, function()
+		if count == 0 then
+			cdLabel.Text = ""
+			cdLabel.TextTransparency = 1
+			cdStroke.Transparency = 1
+		end
+	end)
 end)
 
 RF:WaitForChild("LapUpdate", 10).OnClientEvent:Connect(function(currentLap, maxLaps)
@@ -457,4 +441,4 @@ RF:WaitForChild("PlayerFinished", 10).OnClientEvent:Connect(function(pos)
 	showBanner("🏆  FINISH! " .. pos .. "º LUGAR", Color3.fromRGB(255, 180, 0))
 end)
 
-print("[RaceHUD] Authentic MK8 Overlay UI Loaded!")
+print("[RaceHUD] MK8 Authentic HUD v2 Loaded!")
