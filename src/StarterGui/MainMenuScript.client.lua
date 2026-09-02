@@ -1,5 +1,6 @@
--- MainMenuScript (StarterGui) - v4 LocalScript
+-- MainMenuScript (StarterGui) - v5 LocalScript
 -- Menu principal com selecao de modo e numero de voltas
+-- Auto-destrói o menu quando a corrida arranca para o ecra nao ficar escuro!
 
 local Players = game:GetService("Players")
 local RSt     = game:GetService("ReplicatedStorage")
@@ -85,7 +86,7 @@ end
 local panel = E("Frame", {
 	Name = "Panel",
 	Size = UDim2.new(0, 500, 0, 490),
-	Position = UDim2.new(0.5, -250, -0.7, 0), -- começa fora do ecra
+	Position = UDim2.new(0.5, -250, -0.7, 0),
 	BackgroundColor3 = Color3.fromRGB(8, 12, 45),
 	BackgroundTransparency = 0.08,
 	BorderSizePixel = 0,
@@ -177,10 +178,7 @@ for i, md in ipairs(modes) do
 			}):Play()
 		end
 	end)
-	hoverFx(btn,
-		(i == 1) and md.color or C.dark,
-		Color3.fromRGB(40, 40, 70)
-	)
+	hoverFx(btn, (i == 1) and md.color or C.dark, Color3.fromRGB(40, 40, 70))
 end
 
 -- ============================================================
@@ -227,6 +225,21 @@ for i, lv in ipairs(lapOptions) do
 end
 
 -- ============================================================
+-- FUNCAO PARA FECHAR MENU
+-- ============================================================
+local function hideMenu()
+	if sg and sg.Parent then
+		TS:Create(panel, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+			Position = UDim2.new(0.5, -250, 1.6, 0),
+		}):Play()
+		TS:Create(bg, TweenInfo.new(0.5), { BackgroundTransparency = 1 }):Play()
+		task.delay(0.55, function()
+			if sg and sg.Parent then sg:Destroy() end
+		end)
+	end
+end
+
+-- ============================================================
 -- BOTAO JOGAR
 -- ============================================================
 local playBtn = E("TextButton", {
@@ -245,24 +258,23 @@ GR(playBtn, { C.acc, C.acc2 }, 90)
 hoverFx(playBtn, C.acc, Color3.fromRGB(255, 235, 60))
 
 playBtn.MouseButton1Click:Connect(function()
-	-- Enviar pedido de inicio ao servidor
 	local RF = RSt:FindFirstChild("BrainKartRemotes")
 	if RF then
 		local req = RF:FindFirstChild("RequestStart")
-		if req then
-			req:FireServer()
-			print("[Menu] Corrida iniciada!")
-		end
+		if req then req:FireServer() end
 	end
+	hideMenu()
+end)
 
-	-- Animacao de saida
-	TS:Create(panel, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
-		Position = UDim2.new(0.5, -250, 1.6, 0),
-	}):Play()
-	TS:Create(bg, TweenInfo.new(0.6), { BackgroundTransparency = 1 }):Play()
-	task.delay(0.7, function()
-		if sg and sg.Parent then sg:Destroy() end
-	end)
+-- Fechar menu automaticamente se a corrida arrancar
+task.spawn(function()
+	local RF = RSt:WaitForChild("BrainKartRemotes", 10)
+	if RF then
+		local startEv = RF:WaitForChild("StartRace", 10)
+		if startEv then startEv.OnClientEvent:Connect(hideMenu) end
+		local countEv = RF:WaitForChild("Countdown", 10)
+		if countEv then countEv.OnClientEvent:Connect(hideMenu) end
+	end
 end)
 
 -- Animacao de entrada
@@ -270,4 +282,4 @@ TS:Create(panel, TweenInfo.new(0.8, Enum.EasingStyle.Back, Enum.EasingDirection.
 	Position = UDim2.new(0.5, -250, 0.5, -245),
 }):Play()
 
-print("[Menu] MainMenuScript v4 carregado!")
+print("[Menu] MainMenuScript v5 carregado (com auto-hide para nao escurecer o jogo)!")
