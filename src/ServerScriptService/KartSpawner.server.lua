@@ -138,11 +138,12 @@ local function doSpawnKart(player, char)
 	wc.Part1   = hrp
 	wc.Parent  = kr
 
-	-- Tornar personagem invisivel (so o kart e visivel)
+	-- Tornar personagem invisivel e sem massa (para nao torcer o kart)
 	for _, part in ipairs(char:GetDescendants()) do
 		if part:IsA("BasePart") then
 			part.Transparency = 1
 			part.CanCollide   = false
+			part.Massless     = true
 		elseif part:IsA("Decal") then
 			pcall(function() part.Transparency = 1 end)
 		end

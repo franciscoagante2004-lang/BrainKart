@@ -531,7 +531,14 @@ task.spawn(function()
 	local RF = RSt:WaitForChild("BrainKartRemotes", 20)
 	if not RF then return end
 	RF:WaitForChild("Countdown", 10).OnClientEvent:Connect(function(count)
-		if count == 0 then enabled = true; speed = 0 end
+		if count == 0 then 
+			enabled = true
+			speed = 0
+			if kartRoot then
+				visualForward = kartRoot.CFrame.LookVector
+				movementVector = visualForward
+			end
+		end
 	end)
 	RF:WaitForChild("EndRace", 10).OnClientEvent:Connect(function()
 		enabled = false; speed = 0
