@@ -97,8 +97,8 @@ local function doSpawnKart(player, char)
 
 	local kr = kc:FindFirstChild("KartRoot")
 	local kb = kc:FindFirstChild("Body")
-	if kr then kr.Color = col end
-	if kb then kb.Color = col end
+	if kr and kr:IsA("BasePart") then kr.Color = col end
+	if kb and kb:IsA("BasePart") then kb.Color = col end
 
 	-- Posicionar no spawn point
 	local sf   = workspace:FindFirstChild("SpawnPoints")
