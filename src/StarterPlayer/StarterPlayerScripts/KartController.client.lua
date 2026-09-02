@@ -44,7 +44,7 @@ local CFG = {
 	boostDurs   = { 0.8, 1.8, 3.2 },
 	
 	-- Kinematic Hovercraft (Suspensão)
-	rideHeight  = 3.0,
+	rideHeight  = 1.2,
 	downForce   = 220,
 	
 	-- Visuais
