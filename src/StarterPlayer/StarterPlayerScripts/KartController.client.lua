@@ -187,18 +187,51 @@ end
 local function updateKart(dt)
 	if not kartRoot then return end
 
-	-- ─── LER INPUT ───
+	-- ─── LER INPUT TECLADO ───
 	local acc = 0
 	rawSteer = 0
 	local braking = false
+	local isDriftKeyDown = false
 	
 	if keyDown(Enum.KeyCode.W, Enum.KeyCode.Up)    then acc = 1    end
 	if keyDown(Enum.KeyCode.S, Enum.KeyCode.Down)  then acc = -0.5; braking = true end
 	if keyDown(Enum.KeyCode.A, Enum.KeyCode.Left)  then rawSteer = -1 end
 	if keyDown(Enum.KeyCode.D, Enum.KeyCode.Right) then rawSteer = 1  end
-	
+	if keyDown(Enum.KeyCode.Space, Enum.KeyCode.LeftShift) then isDriftKeyDown = true end
+
+	-- ─── LER INPUT COMANDO (Xbox/PlayStation) ───
+	local gamepads = UIS:GetConnectedGamepads()
+	if #gamepads > 0 then
+		local gp = gamepads[1]
+		local state = UIS:GetGamepadState(gp)
+		for _, input in ipairs(state) do
+			if input.KeyCode == Enum.KeyCode.ButtonA or input.KeyCode == Enum.KeyCode.ButtonR2 then -- Acelerador
+				if input.Position.Z > 0.1 or input.UserInputState == Enum.UserInputState.Begin or input.UserInputState == Enum.UserInputState.Change then
+					acc = 1
+				end
+			end
+			if input.KeyCode == Enum.KeyCode.ButtonX or input.KeyCode == Enum.KeyCode.ButtonL2 then -- Travão/Marcha atrás
+				if input.Position.Z > 0.1 or input.UserInputState == Enum.UserInputState.Begin or input.UserInputState == Enum.UserInputState.Change then
+					acc = -0.5
+					braking = true
+				end
+			end
+			if input.KeyCode == Enum.KeyCode.ButtonR1 or input.KeyCode == Enum.KeyCode.ButtonL1 then -- Drift/Hop (RB / LB)
+				if input.UserInputState == Enum.UserInputState.Begin or input.UserInputState == Enum.UserInputState.Change then
+					isDriftKeyDown = true
+				end
+			end
+			if input.KeyCode == Enum.KeyCode.Thumbstick1 then -- Virar (Left Stick)
+				if math.abs(input.Position.X) > 0.15 then
+					rawSteer = input.Position.X -- Analógico (vai de -1 a 1, ótimo para o Lerp)
+				end
+			end
+		end
+	end
+
+	-- Lógica de pressão única para o Salto (Hop) do Drift
 	local driftKeyJustPressed = false
-	if keyDown(Enum.KeyCode.Space, Enum.KeyCode.LeftShift) then
+	if isDriftKeyDown then
 		if not driftKeyHeld then driftKeyJustPressed = true end
 		driftKeyHeld = true
 	else
