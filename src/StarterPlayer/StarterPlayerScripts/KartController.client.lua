@@ -218,7 +218,7 @@ local function updateKart(dt)
 	local rResult = workspace:Raycast(rOrigin, rDir, rayParams)
 	isOnOffroad = false
 	
-	if rResult then
+	if rResult and rResult.Normal.Y > 0.4 then
 		isGrounded = true
 		groundNormal = groundNormal:Lerp(rResult.Normal, 15 * dt).Unit
 		if rResult.Material == Enum.Material.Grass or rResult.Material == Enum.Material.Sand then
