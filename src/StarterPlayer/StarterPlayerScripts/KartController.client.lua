@@ -1,5 +1,5 @@
--- KartController (StarterPlayerScripts) - Advanced MK8 Physics LocalScript
--- Controlos: W/A/S/D = conduzir | SPACE/LShift = drift+boost | E = item
+-- KartController (StarterPlayerScripts) - MK8 Arcade Physics (Senior Gameplay Programmer Edition)
+-- Implementação: Kinematic Body Hovercraft, State Machine, Steering Lerp, Drift Slip-Angle, Mini-Turbo
 
 local Players   = game:GetService("Players")
 local UIS       = game:GetService("UserInputService")
@@ -11,39 +11,45 @@ local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
 -- ============================================================
--- CONFIGURACAO HYPER KARTS / MK8 ADVANCED
+-- TUNING PARAMETERS (MK8 Arcade Physics)
 -- ============================================================
 local CFG = {
-	accel       = 80,     -- aceleração rápida
-	maxSpeed    = 135,    -- velocidade máxima normal (studs/s)
-	brakeForce  = 0.90,   -- força de travagem normal
-	decel       = 0.97,   -- desaceleração natural
-	offroadDecel= 0.85,   -- desaceleração extra quando na relva/terra
-	reverseSpd  = 30,     -- velocidade máxima em marcha atrás
-	turnSpeed   = 1.5,    -- agilidade de viragem (muito suave)
+	-- Aceleração e Velocidade
+	accel       = 80,
+	maxSpeed    = 135,
+	brakeForce  = 0.90,
+	decel       = 0.97,
+	offroadDecel= 0.85,
+	reverseSpd  = 30,
 	
-	-- Tilt Visual (Inclinação)
-	maxTilt     = math.rad(15), 
-	tiltSpeed   = 6,      
+	-- 1. Sensibilidade e Suavização de Input
+	steerLerpSpeed = 4.5, -- ~0.22s para ir de 0 a 1, dá peso à direção
+	baseTurnRate   = math.rad(95), -- Graus/s em condução normal
 	
-	-- Drift, Momentum & MT (Mini-Turbo)
-	driftTurn   = 3.6,    -- viragem mais apertada durante o drift
-	hopHeight   = 22,     -- força do salto ao iniciar o drift
+	-- 2, 3 & 4. Drift & Slip Angle
+	hopForce       = 32,
+	baseDriftTurn  = math.rad(45), -- Velocidade angular constante passiva do drift
+	minDriftTurn   = math.rad(15), -- Quando contra-breca
+	maxDriftTurn   = math.rad(85), -- Quando vira tudo para dentro
+	driftTraction  = 2.8, -- Deslizamento: Velocidade com que o vetor de movimento persegue o modelo 3D
 	
-	-- Mini-Turbo Charge
-	baseChargeRate = 1.0,
-	mtThreshold1 = 0.6,    -- Limiar Azul
-	mtThreshold2 = 1.8,    -- Limiar Laranja
-	mtThreshold3 = 3.5,    -- Limiar Rosa (Ultra)
+	-- 5. Mini-Turbo System
+	mtChargeRate = 1.0,
+	mtSoftDrift  = 0.7, -- Threshold do input bruto para carregar mais rápido
+	mtTier1 = 0.6,    -- Azul
+	mtTier2 = 1.8,    -- Laranja
+	mtTier3 = 3.5,    -- Rosa (Ultra)
 	
-	boostSpds   = { 170, 205, 255 }, -- velocidades de boost (Azul, Laranja, Rosa)
-	boostDurs   = { 0.8, 1.8, 3.2 }, -- durações de boost
+	boostSpds   = { 170, 205, 255 },
+	boostDurs   = { 0.8, 1.8, 3.2 },
 	
-	-- Suspensão (Raycast)
-	rideHeight  = 3.0,    -- altura que o carro flutua sobre a pista
-	downForce   = 200,    -- gravidade artificial para agarrar à pista
+	-- Kinematic Hovercraft (Suspensão)
+	rideHeight  = 3.0,
+	downForce   = 220,
 	
-	-- Câmara
+	-- Visuais
+	maxTilt     = math.rad(15),
+	tiltSpeed   = 6,
 	camDist     = 22,
 	camHeight   = 9,
 	camSmooth   = 0.15,
@@ -52,27 +58,39 @@ local CFG = {
 }
 
 -- ============================================================
--- ESTADO
+-- STATE MACHINE
 -- ============================================================
+local STATE_DRIVING  = 1
+local STATE_AIRBORNE = 2
+local STATE_DRIFTING = 3
+
+local currentState = STATE_DRIVING
+
 local kart, kartRoot = nil, nil
 local speed          = 0
 local yVelocity      = 0
-local drifting, driftDir = false, 0
-local mtCharge, driftLevel = 0, 0
-local boosting, boostEnd, currentBoostSpeed = false, 0, 0
-local enabled  = false  -- so ativa apos GO!
-local stunEnd  = 0
-local groundNormal = Vector3.new(0, 1, 0)
-local isGrounded = false
-local currentTilt = 0
-local isOnOffroad = false
-local lastBump = 0 -- Cooldown de colisão com parede
-local currentTurnAmt = 0 -- Suavizador de curva
+local enabled        = false
 
--- Momentum Desacoplado
+-- Input e Vetores
+local currentSteer   = 0 -- Input suavizado (Lerp)
+local rawSteer       = 0
+local driftKeyHeld   = false
+
+local visualForward  = Vector3.new(0, 0, -1)
 local movementVector = Vector3.new(0, 0, -1)
+local groundNormal   = Vector3.new(0, 1, 0)
+local isGrounded     = false
+local isOnOffroad    = false
+local currentTilt    = 0
+local lastBump       = 0
 
--- Referências para as faíscas
+-- Drift State Variables
+local driftDir       = 0
+local mtCharge       = 0
+local driftLevel     = 0
+
+-- Boost State
+local boosting, boostEnd, currentBoostSpeed = false, 0, 0
 local sparkEmitters = {}
 
 -- ============================================================
@@ -91,7 +109,9 @@ local function keyDown(...)
 	return false
 end
 
--- Configura as partículas de Drift
+-- ============================================================
+-- EFEITOS VISUAIS
+-- ============================================================
 local function setupSparks()
 	if not kart or #sparkEmitters > 0 then return end
 	local root = kart:FindFirstChild("KartRoot")
@@ -103,7 +123,7 @@ local function setupSparks()
 		a.Parent = root
 		
 		local e = Instance.new("ParticleEmitter")
-		e.Texture = "rbxassetid://1347000185" -- Estrela simples ou flash
+		e.Texture = "rbxassetid://1347000185"
 		e.Rate = 0
 		e.Speed = NumberRange.new(5, 10)
 		e.Lifetime = NumberRange.new(0.2, 0.4)
@@ -117,109 +137,91 @@ end
 
 local function setSparks(level)
 	for _, e in ipairs(sparkEmitters) do
-		if level == 0 then
-			e.Rate = 0
+		if level == 0 then e.Rate = 0
 		else
 			e.Rate = 60
-			if level == 1 then
-				e.Color = ColorSequence.new(Color3.fromRGB(0, 200, 255)) -- Azul
-			elseif level == 2 then
-				e.Color = ColorSequence.new(Color3.fromRGB(255, 120, 0)) -- Laranja
-			elseif level == 3 then
-				e.Color = ColorSequence.new(Color3.fromRGB(255, 50, 200)) -- Rosa
-			end
+			if level == 1 then e.Color = ColorSequence.new(Color3.fromRGB(0, 200, 255))
+			elseif level == 2 then e.Color = ColorSequence.new(Color3.fromRGB(255, 120, 0))
+			elseif level == 3 then e.Color = ColorSequence.new(Color3.fromRGB(255, 50, 200)) end
 		end
 	end
 end
 
 local function cancelDrift()
-	drifting = false
+	if currentState == STATE_DRIFTING then
+		currentState = STATE_DRIVING
+	end
 	mtCharge = 0
 	driftLevel = 0
 	setSparks(0)
 end
 
 -- ============================================================
--- FISICAS DO KART (ADVANCED MK8)
+-- MATH HELPERS
+-- ============================================================
+local function lerp(a, b, t) return a + (b - a) * t end
+
+local function applyBoost(tier)
+	boosting = true
+	currentBoostSpeed = CFG.boostSpds[tier]
+	boostEnd = tick() + CFG.boostDurs[tier]
+	speed = currentBoostSpeed
+	
+	task.spawn(function()
+		local gui = player.PlayerGui:FindFirstChild("RaceHUD")
+		if not gui then return end
+		local flash = Instance.new("Frame")
+		flash.Size = UDim2.new(1, 0, 1, 0)
+		flash.BackgroundColor3 = (tier == 1 and Color3.fromRGB(0,200,255)) or (tier == 2 and Color3.fromRGB(255,120,0)) or Color3.fromRGB(255,50,200)
+		flash.BackgroundTransparency = 0.6
+		flash.ZIndex = 50
+		flash.Parent = gui
+		TS:Create(flash, TweenInfo.new(0.5), { BackgroundTransparency = 1 }):Play()
+		task.delay(0.5, function() if flash then flash:Destroy() end end)
+	end)
+end
+
+-- ============================================================
+-- MAIN PHYSICS LOOP
 -- ============================================================
 local function updateKart(dt)
 	if not kartRoot then return end
-	
-	-- HITSTUN: Se bater de frente numa parede, perde controlo
-	if tick() < stunEnd then 
-		speed = speed * 0.88 
-		-- Aplicar gravidade passiva
-		yVelocity = yVelocity - (CFG.downForce * dt)
-		kartRoot.AssemblyLinearVelocity = (movementVector * speed) + Vector3.new(0, yVelocity, 0)
-		return 
-	end
 
-	local acc, str = 0, 0
-	local dk = false -- drift key
+	-- ─── LER INPUT ───
+	local acc = 0
+	rawSteer = 0
 	local braking = false
-
-	-- Leitura do teclado
-	if keyDown(Enum.KeyCode.W, Enum.KeyCode.Up)    then acc =  1    end
-	if keyDown(Enum.KeyCode.S, Enum.KeyCode.Down)   then 
-		acc = -0.5
-		braking = true 
-	end
-	if keyDown(Enum.KeyCode.A, Enum.KeyCode.Left)   then str = -1    end
-	if keyDown(Enum.KeyCode.D, Enum.KeyCode.Right)  then str =  1    end
-	if keyDown(Enum.KeyCode.Space, Enum.KeyCode.LeftShift) then dk = true end
-
-	-- Leitura do Comando (Xbox/PS)
-	local gamepads = UIS:GetConnectedGamepads()
-	if #gamepads > 0 then
-		local gp = gamepads[1]
-		local state = UIS:GetGamepadState(gp)
-		for _, input in ipairs(state) do
-			if input.KeyCode == Enum.KeyCode.ButtonB and input.UserInputState == Enum.UserInputState.Begin then
-				acc = 1
-			elseif input.KeyCode == Enum.KeyCode.ButtonA and input.UserInputState == Enum.UserInputState.Begin then
-				acc = -0.5
-				braking = true
-			elseif (input.KeyCode == Enum.KeyCode.ButtonR1 or input.KeyCode == Enum.KeyCode.ButtonR2) and input.UserInputState == Enum.UserInputState.Begin then
-				dk = true
-			elseif input.KeyCode == Enum.KeyCode.Thumbstick1 then
-				if math.abs(input.Position.X) > 0.15 then
-					str = input.Position.X
-				end
-			end
-		end
-	end
-
-	local topSpd = CFG.maxSpeed
 	
-	-- BOOST OVERRIDE
-	local targetFOV = CFG.baseFOV
-	if boosting then
-		if tick() > boostEnd then 
-			boosting = false
-		else 
-			topSpd = currentBoostSpeed
-			targetFOV = CFG.boostFOV 
-		end
+	if keyDown(Enum.KeyCode.W, Enum.KeyCode.Up)    then acc = 1    end
+	if keyDown(Enum.KeyCode.S, Enum.KeyCode.Down)  then acc = -0.5; braking = true end
+	if keyDown(Enum.KeyCode.A, Enum.KeyCode.Left)  then rawSteer = -1 end
+	if keyDown(Enum.KeyCode.D, Enum.KeyCode.Right) then rawSteer = 1  end
+	
+	local driftKeyJustPressed = false
+	if keyDown(Enum.KeyCode.Space, Enum.KeyCode.LeftShift) then
+		if not driftKeyHeld then driftKeyJustPressed = true end
+		driftKeyHeld = true
+	else
+		driftKeyHeld = false
 	end
-	camera.FieldOfView = camera.FieldOfView + (targetFOV - camera.FieldOfView) * 10 * dt
 
-	-- Raycasts
+	-- 1. SENSITIVIDADE E SUAVIZAÇÃO DE INPUT (Steering Lerp)
+	currentSteer = lerp(currentSteer, rawSteer, CFG.steerLerpSpeed * dt)
+
+	-- ─── RAYCAST (Hovercraft / Chão) ───
+	local rOrigin = kartRoot.CFrame.Position
+	local rDir = -kartRoot.CFrame.UpVector * (CFG.rideHeight + 2)
 	local rayParams = RaycastParams.new()
 	rayParams.FilterDescendantsInstances = {kart, player.Character}
 	rayParams.FilterType = Enum.RaycastFilterType.Exclude
 	
-	-- RAYCAST 1: CHÃO (Offroad & Orientação)
-	local rOrigin = kartRoot.CFrame.Position
-	local rDir = -kartRoot.CFrame.UpVector * (CFG.rideHeight + 2)
 	local rResult = workspace:Raycast(rOrigin, rDir, rayParams)
-	
 	isOnOffroad = false
+	
 	if rResult then
 		isGrounded = true
 		groundNormal = groundNormal:Lerp(rResult.Normal, 15 * dt).Unit
-		
-		-- Detetar Off-road
-		if rResult.Material == Enum.Material.Grass or rResult.Material == Enum.Material.Sand or rResult.Material == Enum.Material.LeafyGrass then
+		if rResult.Material == Enum.Material.Grass or rResult.Material == Enum.Material.Sand then
 			isOnOffroad = true
 		end
 	else
@@ -227,20 +229,16 @@ local function updateKart(dt)
 		groundNormal = groundNormal:Lerp(Vector3.new(0, 1, 0), 5 * dt).Unit
 	end
 	
-	-- RAYCAST 2: COLISÕES RÍGIDAS (Paredes)
+	-- Colisões rígidas (Paredes)
 	if speed > 20 and tick() > lastBump then
-		-- Verifica à frente
 		local wallRay = workspace:Raycast(rOrigin, movementVector * 6, rayParams)
 		if wallRay then
 			local dot = -movementVector:Dot(wallRay.Normal)
 			if dot > 0.65 then
-				-- ÂNGULO OBTUSO (Frontal): Hitstun, cancela tudo, speed 0
 				cancelDrift()
 				speed = 0
-				stunEnd = tick() + 0.6
 				lastBump = tick() + 0.8
 			elseif dot > 0.1 then
-				-- ÂNGULO AGUDO (Roçar de raspão): Perde 20% da velocidade, repele
 				speed = speed * 0.8
 				movementVector = (movementVector + wallRay.Normal * 0.5).Unit
 				lastBump = tick() + 0.3
@@ -248,150 +246,131 @@ local function updateKart(dt)
 		end
 	end
 
-	-- EFEITO OFF-ROAD
+	-- Efeito Offroad
 	local effectiveDecel = CFG.decel
+	local topSpd = CFG.maxSpeed
+	
+	if boosting then
+		if tick() > boostEnd then boosting = false
+		else topSpd = currentBoostSpeed end
+	end
+	
 	if isOnOffroad and not boosting then
 		effectiveDecel = CFG.offroadDecel
-		topSpd = topSpd * 0.3 -- Velocidade máxima cai drasticamente para 30%
-		
-		-- OFFROAD CANCELA DRIFT IMEDIATAMENTE
-		if drifting then
-			cancelDrift()
-		end
+		topSpd = topSpd * 0.3
+		if currentState == STATE_DRIFTING then cancelDrift() end
 	end
 
-	-- Drift & Hop State Machine
+	-- ─── STATE MACHINE (Jump & Drift Initiation) ───
 	if isGrounded then
-		if dk and not drifting and speed > 30 and not isOnOffroad then
-			yVelocity = CFG.hopHeight
-			if math.abs(str) > 0.1 then
-				drifting = true
-				driftDir = math.sign(str)
+		if currentState == STATE_AIRBORNE then
+			-- Aterrar
+			if driftKeyHeld and math.abs(rawSteer) > 0.1 and speed > 30 and not isOnOffroad then
+				currentState = STATE_DRIFTING
+				driftDir = math.sign(rawSteer)
 				mtCharge = 0
 				driftLevel = 0
-			end
-		elseif dk and drifting then
-			if braking then
-				speed = speed * 0.95
-			end
-			
-			local chargeMult = 0
-			if math.sign(str) == math.sign(driftDir) then
-				if math.abs(str) >= 0.707 then
-					chargeMult = 1.0 
-				else
-					chargeMult = math.abs(str) / 0.707
-				end
 			else
-				chargeMult = 0.2 
+				currentState = STATE_DRIVING
 			end
-			
-			mtCharge = mtCharge + (CFG.baseChargeRate * chargeMult * dt)
-			
-			local newLevel = 0
-			if mtCharge >= CFG.mtThreshold3 then newLevel = 3
-			elseif mtCharge >= CFG.mtThreshold2 then newLevel = 2
-			elseif mtCharge >= CFG.mtThreshold1 then newLevel = 1 end
-			
-			if newLevel ~= driftLevel then
-				driftLevel = newLevel
-				setSparks(driftLevel)
-			end
-		elseif not dk and drifting then
-			drifting = false
-			setSparks(0)
-			if driftLevel > 0 then
-				boosting = true
-				currentBoostSpeed = CFG.boostSpds[driftLevel]
-				boostEnd = tick() + CFG.boostDurs[driftLevel]
-				speed = currentBoostSpeed
-				
-				task.spawn(function()
-					local gui = player.PlayerGui:FindFirstChild("RaceHUD")
-					if not gui then return end
-					local flash = Instance.new("Frame")
-					flash.Size = UDim2.new(1, 0, 1, 0)
-					flash.BackgroundColor3 = (driftLevel == 1 and Color3.fromRGB(0,200,255)) or (driftLevel == 2 and Color3.fromRGB(255,120,0)) or Color3.fromRGB(255,50,200)
-					flash.BackgroundTransparency = 0.6
-					flash.ZIndex = 50
-					flash.Parent = gui
-					TS:Create(flash, TweenInfo.new(0.5), { BackgroundTransparency = 1 }):Play()
-					task.delay(0.5, function() if flash then flash:Destroy() end end)
-				end)
-			end
-			driftLevel = 0
+		end
+		
+		if currentState == STATE_DRIVING and driftKeyJustPressed and speed > 30 and not isOnOffroad then
+			yVelocity = CFG.hopForce
+			currentState = STATE_AIRBORNE
 		end
 	else
-		if not dk and drifting then
-			cancelDrift()
-		end
+		currentState = STATE_AIRBORNE
 	end
 
-	-- Aceleração Padrão
-	if not (drifting and braking) then
+	-- ─── ACELERAÇÃO PDRÃO ───
+	if not (currentState == STATE_DRIFTING and braking) then
 		if acc > 0 then
 			speed = math.min(speed + (CFG.accel * dt), topSpd)
 		elseif acc < 0 then
-			speed = speed > 2 
-				and speed * CFG.brakeForce 
-				or math.max(speed + (acc * CFG.accel * dt * 0.5), -CFG.reverseSpd)
+			speed = speed > 2 and speed * CFG.brakeForce or math.max(speed + (acc * CFG.accel * dt * 0.5), -CFG.reverseSpd)
 		else
 			speed = speed * effectiveDecel
 			if math.abs(speed) < 1 then speed = 0 end
 		end
 	end
-	
 	if isOnOffroad and not boosting and speed > topSpd then
 		speed = speed * effectiveDecel
 	end
-	
-	-- Viragem
-	local targetTurnAmt = 0
+
+	-- ─── 3 & 4. MATEMÁTICA DA DERRAPAGEM E DESLIZAMENTO ───
+	local turnRate = 0
 	local targetTilt = 0
-	local visualOffsetYaw = 0 
 	
-	if math.abs(speed) > 2 then
-		if drifting and driftDir ~= 0 then
-			-- 1. O VIÉS BASE (A Âncora)
-			local baseTurn = driftDir * (CFG.turnSpeed * 0.6)
+	if currentState == STATE_DRIFTING then
+		if not driftKeyHeld then
+			-- Largar o drift = Boost se carregado
+			currentState = STATE_DRIVING
+			setSparks(0)
+			if driftLevel > 0 then applyBoost(driftLevel) end
+			driftLevel = 0
+		else
+			if braking then speed = speed * 0.95 end
 			
-			-- O analógico só soma/subtrai a este viés
-			local steerAdjust = str * (CFG.driftTurn * 0.7)
-			targetTurnAmt = baseTurn + steerAdjust
+			-- 5. Mini-Turbo System
+			local chargeMult = 0.2
+			if math.sign(rawSteer) == driftDir and math.abs(rawSteer) >= CFG.mtSoftDrift then
+				chargeMult = 1.0 -- Soft drifting (input forte para dentro)
+			end
+			mtCharge = mtCharge + (CFG.mtChargeRate * chargeMult * dt)
 			
-			-- 2. CLAMPING ESTRITO
-			local minTurn = CFG.turnSpeed * 0.25 
-			local maxTurn = CFG.driftTurn * 1.15 
+			local newLevel = 0
+			if mtCharge >= CFG.mtTier3 then newLevel = 3
+			elseif mtCharge >= CFG.mtTier2 then newLevel = 2
+			elseif mtCharge >= CFG.mtTier1 then newLevel = 1 end
 			
-			if driftDir > 0 then
-				targetTurnAmt = math.clamp(targetTurnAmt, minTurn, maxTurn)
-			else
-				targetTurnAmt = math.clamp(targetTurnAmt, -maxTurn, -minTurn)
+			if newLevel ~= driftLevel then
+				driftLevel = newLevel
+				setSparks(driftLevel)
 			end
 			
-			targetTilt = -driftDir * CFG.maxTilt * 1.5 
-			visualOffsetYaw = -driftDir * math.rad(35) 
-		else
-			targetTurnAmt = str * CFG.turnSpeed
-			targetTilt = -str * CFG.maxTilt 
+			-- 3. Turn Rate (Velocidade Angular Clamped)
+			local steerInDir = currentSteer * driftDir
+			if steerInDir > 0 then
+				-- Virar para dentro da curva (Max)
+				turnRate = driftDir * lerp(CFG.baseDriftTurn, CFG.maxDriftTurn, steerInDir)
+			else
+				-- Contra-brecar (Min)
+				turnRate = driftDir * lerp(CFG.baseDriftTurn, CFG.minDriftTurn, -steerInDir)
+			end
+			
+			targetTilt = -driftDir * CFG.maxTilt * 1.5
 		end
+	elseif currentState == STATE_DRIVING then
+		turnRate = currentSteer * CFG.baseTurnRate
+		targetTilt = -currentSteer * CFG.maxTilt
 	end
 	
-	-- SUAVIZAÇÃO DA CURVA (Interpolamos a força da viragem para não ser instantânea)
-	-- Quanto mais baixo o número multiplicador (ex: 4), mais demora a apertar a curva
-	currentTurnAmt = currentTurnAmt + (targetTurnAmt - currentTurnAmt) * 4 * dt
-	
-	currentTilt = currentTilt + (targetTilt - currentTilt) * CFG.tiltSpeed * dt
+	if speed < 5 then turnRate = 0 end
 
-	local right = movementVector:Cross(groundNormal).Unit
-	local newForward = groundNormal:Cross(right).Unit
+	-- Roda o vetor visual (para onde o modelo aponta) em torno da normal do chão
+	local turnRot = CFrame.fromAxisAngle(groundNormal, -turnRate * math.sign(speed) * dt)
+	visualForward = (turnRot * visualForward).Unit
 	
-	local movementTurnRot = CFrame.Angles(0, -currentTurnAmt * dt * math.sign(speed), 0)
-	local movementCF = CFrame.fromMatrix(kartRoot.Position, right, groundNormal, -newForward) * movementTurnRot
-	movementVector = movementCF.LookVector
+	-- Garante ortogonalidade
+	local right = visualForward:Cross(groundNormal).Unit
+	visualForward = groundNormal:Cross(right).Unit
 	
-	local visualRot = movementCF * CFrame.Angles(0, visualOffsetYaw, currentTilt)
-	kartRoot.CFrame = visualRot
+	-- 4. O DESLIZAMENTO (Slip Angle)
+	if currentState == STATE_DRIFTING then
+		-- O vetor de movimento (tração) persegue lentamente a frente do kart (cria o drift outward)
+		movementVector = movementVector:Lerp(visualForward, CFG.driftTraction * dt).Unit
+	else
+		-- Na condução normal, o kart move-se exatamente para onde aponta
+		movementVector = visualForward
+	end
+
+	-- Tilt Visual
+	currentTilt = lerp(currentTilt, targetTilt, CFG.tiltSpeed * dt)
+	local visualOffsetYaw = (currentState == STATE_DRIFTING) and (-driftDir * math.rad(30)) or 0
+	
+	local modelRot = CFrame.fromMatrix(kartRoot.Position, right, groundNormal, -visualForward)
+	kartRoot.CFrame = modelRot * CFrame.Angles(0, visualOffsetYaw, currentTilt)
 
 	-- Física Vertical
 	if isGrounded then
@@ -407,12 +386,17 @@ local function updateKart(dt)
 	
 	if kartRoot.Position.Y < -50 then
 		kartRoot.CFrame = CFrame.new(0, 10, 0)
-		movementVector = Vector3.new(0, 0, -1)
-		speed = 0
-		yVelocity = 0
+		visualForward = Vector3.new(0, 0, -1)
+		movementVector = visualForward
+		speed = 0; yVelocity = 0
 	end
 
+	-- APLICAR FORÇA (Hovercraft)
 	kartRoot.AssemblyLinearVelocity = (movementVector * speed) + Vector3.new(0, yVelocity, 0)
+	
+	-- FOV Camera
+	local targetFOV = boosting and CFG.boostFOV or CFG.baseFOV
+	camera.FieldOfView = lerp(camera.FieldOfView, targetFOV, 10 * dt)
 end
 
 -- ============================================================
@@ -423,7 +407,7 @@ local function updateCamera()
 	camera.CameraType = Enum.CameraType.Scriptable
 	
 	local pos = kartRoot.CFrame.Position
-	local driftOffset = drifting and (kartRoot.CFrame.RightVector * (driftDir * -2)) or Vector3.zero
+	local driftOffset = (currentState == STATE_DRIFTING) and (kartRoot.CFrame.RightVector * (driftDir * -2)) or Vector3.zero
 	local back = movementVector * -CFG.camDist
 	local desired = pos + back + Vector3.new(0, CFG.camHeight, 0) + driftOffset
 	
@@ -434,7 +418,7 @@ local function updateCamera()
 end
 
 -- ============================================================
--- PROCURAR KART
+-- INIT & LOOPS
 -- ============================================================
 local function waitForKart()
 	local attempts = 0
@@ -442,9 +426,10 @@ local function waitForKart()
 		kart, kartRoot = findKart()
 		if kartRoot then
 			speed = 0
-			movementVector = kartRoot.CFrame.LookVector
+			visualForward = kartRoot.CFrame.LookVector
+			movementVector = visualForward
 			setupSparks()
-			print("[KC] Kart Advanced MK8 encontrado: " .. kart.Name)
+			print("[KC] MK8 Arcade Physics Initialized")
 		else
 			attempts = attempts + 1
 			task.wait(0.5)
@@ -452,30 +437,22 @@ local function waitForKart()
 	end
 end
 
--- ============================================================
--- REMOTE EVENTS
--- ============================================================
 task.spawn(function()
 	local RF = RSt:WaitForChild("BrainKartRemotes", 20)
 	if not RF then return end
-
 	RF:WaitForChild("Countdown", 10).OnClientEvent:Connect(function(count)
 		if count == 0 then enabled = true; speed = 0 end
 	end)
-
 	RF:WaitForChild("EndRace", 10).OnClientEvent:Connect(function()
 		enabled = false; speed = 0
 		if kartRoot then kartRoot.AssemblyLinearVelocity = Vector3.zero end
 	end)
 end)
 
--- ============================================================
--- RESPAWN & LOOPS
--- ============================================================
 player.CharacterAdded:Connect(function()
 	kart, kartRoot = nil, nil
 	speed, yVelocity = 0, 0
-	enabled, drifting = false, false
+	enabled, currentState = false, STATE_DRIVING
 	sparkEmitters = {}
 	camera.FieldOfView = CFG.baseFOV
 	task.spawn(waitForKart)
@@ -491,5 +468,3 @@ end)
 RS.RenderStepped:Connect(function()
 	if kartRoot and kartRoot.Parent then updateCamera() end
 end)
-
-print("[KC] KartController Colisoes & Offroad carregado!")
