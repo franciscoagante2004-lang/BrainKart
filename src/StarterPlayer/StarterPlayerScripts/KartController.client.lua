@@ -85,9 +85,11 @@ local currentTilt    = 0
 local lastBump       = 0
 
 -- Drift State Variables
-local driftDir       = 0
-local mtCharge       = 0
-local driftLevel     = 0
+local driftDir             = 0
+local mtCharge             = 0
+local driftLevel           = 0
+local pendingDriftDir      = 0
+local wasDriftingBeforeAir = false
 
 -- Boost State
 local boosting, boostEnd, currentBoostSpeed = false, 0, 0
@@ -153,6 +155,8 @@ local function cancelDrift()
 	end
 	mtCharge = 0
 	driftLevel = 0
+	wasDriftingBeforeAir = false
+	pendingDriftDir = 0
 	setSparks(0)
 end
 
@@ -295,22 +299,49 @@ local function updateKart(dt)
 	end
 
 	-- ─── STATE MACHINE (Jump & Drift Initiation) ───
+	if currentState == STATE_DRIFTING and not isGrounded then
+		wasDriftingBeforeAir = true
+		currentState = STATE_AIRBORNE
+	end
+
+	if currentState == STATE_DRIVING and driftKeyJustPressed and speed > 30 and not isOnOffroad then
+		yVelocity = CFG.hopForce
+		currentState = STATE_AIRBORNE
+		pendingDriftDir = (math.abs(rawSteer) > 0.1) and math.sign(rawSteer) or 0
+		wasDriftingBeforeAir = false
+	end
+
+	if currentState == STATE_AIRBORNE and not wasDriftingBeforeAir and pendingDriftDir == 0 then
+		if math.abs(rawSteer) > 0.1 then
+			pendingDriftDir = math.sign(rawSteer)
+		end
+	end
+
 	if isGrounded then
 		if currentState == STATE_AIRBORNE then
 			-- Aterrar
-			if driftKeyHeld and math.abs(rawSteer) > 0.1 and speed > 30 and not isOnOffroad then
-				currentState = STATE_DRIFTING
-				driftDir = math.sign(rawSteer)
-				mtCharge = 0
-				driftLevel = 0
+			if driftKeyHeld and speed > 30 and not isOnOffroad then
+				if wasDriftingBeforeAir then
+					-- Resumir drift sem alterar a direção original
+					currentState = STATE_DRIFTING
+					wasDriftingBeforeAir = false
+				else
+					-- Iniciar novo drift com a direção travada ao saltar
+					local startDir = pendingDriftDir ~= 0 and pendingDriftDir or ((math.abs(rawSteer) > 0.1) and math.sign(rawSteer) or 0)
+					if startDir ~= 0 then
+						currentState = STATE_DRIFTING
+						driftDir = startDir
+						mtCharge = 0
+						driftLevel = 0
+					else
+						currentState = STATE_DRIVING
+					end
+				end
 			else
 				currentState = STATE_DRIVING
+				wasDriftingBeforeAir = false
+				pendingDriftDir = 0
 			end
-		end
-		
-		if currentState == STATE_DRIVING and driftKeyJustPressed and speed > 30 and not isOnOffroad then
-			yVelocity = CFG.hopForce
-			currentState = STATE_AIRBORNE
 		end
 	else
 		currentState = STATE_AIRBORNE
