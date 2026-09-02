@@ -1,4 +1,4 @@
--- HudScript (StarterGui > RaceHUDGui) - Mario Kart 8 Deluxe Style Overlay
+-- HudScript (StarterGui > RaceHUDGui) - Premium Mario Kart 8 Deluxe Style HUD Overlay
 local Players           = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService        = game:GetService("RunService")
@@ -10,7 +10,11 @@ local playerGui = player:WaitForChild("PlayerGui")
 local RF = ReplicatedStorage:WaitForChild("BrainKartRemotes", 20)
 if not RF then warn("[RaceHUD] BrainKartRemotes not found!"); return end
 
--- Create ScreenGui
+-- Clean previous instances
+local oldHUD = playerGui:FindFirstChild("RaceHUD")
+if oldHUD then oldHUD:Destroy() end
+
+-- Create Main ScreenGui
 local sg = Instance.new("ScreenGui")
 sg.Name = "RaceHUD"
 sg.ResetOnSpawn = false
@@ -18,7 +22,7 @@ sg.IgnoreGuiInset = true
 sg.Enabled = true
 sg.Parent = playerGui
 
--- Helpers for styling
+-- ─── HELPER STYLING FUNCTIONS ───
 local function addCorner(parent, radius)
 	local c = Instance.new("UICorner")
 	c.CornerRadius = UDim.new(0, radius)
@@ -26,240 +30,405 @@ local function addCorner(parent, radius)
 	return c
 end
 
+local function addGradient(parent, colorSequence, rotation)
+	local g = Instance.new("UIGradient")
+	g.Color = colorSequence
+	g.Rotation = rotation or 90
+	g.Parent = parent
+	return g
+end
+
+local function addStroke(parent, color, thickness, mode)
+	local s = Instance.new("UIStroke")
+	s.Color = color or Color3.fromRGB(255, 255, 255)
+	s.Thickness = thickness or 2
+	s.ApplyStrokeMode = mode or Enum.ApplyStrokeMode.Border
+	s.Parent = parent
+	return s
+end
+
+local function addShadow(parent, sizeOffset, transparency)
+	local shadow = Instance.new("Frame")
+	shadow.Name = "DropShadow"
+	shadow.Size = UDim2.new(1, sizeOffset or 6, 1, sizeOffset or 6)
+	shadow.Position = UDim2.new(0, 3, 0, 4)
+	shadow.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+	shadow.BackgroundTransparency = transparency or 0.65
+	shadow.ZIndex = math.max(1, parent.ZIndex - 1)
+	shadow.Parent = parent.Parent
+	addCorner(shadow, parent:FindFirstChildOfClass("UICorner") and parent.UICorner.CornerRadius.Offset or 16)
+	return shadow
+end
+
 -- ============================================================
--- 1. TOP-LEFT: ITEM SLOTS (ABILIDADES - MK8 STYLE)
+-- 1. TOP-LEFT: ITEM SLOTS (ABILIDADES - MK8 PREMIUM GLASS)
 -- ============================================================
 local itemContainer = Instance.new("Frame")
 itemContainer.Name = "ItemContainer"
-itemContainer.Size = UDim2.new(0, 140, 0, 140)
+itemContainer.Size = UDim2.new(0, 160, 0, 160)
 itemContainer.Position = UDim2.new(0, 25, 0, 25)
 itemContainer.BackgroundTransparency = 1
 itemContainer.Parent = sg
 
--- Primary Item Circle (Held Item)
-local mainItemCircle = Instance.new("Frame")
-mainItemCircle.Name = "MainItemSlot"
-mainItemCircle.Size = UDim2.new(0, 85, 0, 85)
-mainItemCircle.Position = UDim2.new(0, 30, 0, 30)
-mainItemCircle.BackgroundColor3 = Color3.fromRGB(15, 18, 24)
-mainItemCircle.BackgroundTransparency = 0.35
-mainItemCircle.Parent = itemContainer
-addCorner(mainItemCircle, 45)
+-- Primary Main Item Slot (Held)
+local mainSlot = Instance.new("Frame")
+mainSlot.Name = "MainItemSlot"
+mainSlot.Size = UDim2.new(0, 96, 0, 96)
+mainSlot.Position = UDim2.new(0, 35, 0, 35)
+mainSlot.BackgroundColor3 = Color3.fromRGB(20, 24, 35)
+mainSlot.BackgroundTransparency = 0.25
+mainSlot.ZIndex = 3
+mainSlot.Parent = itemContainer
+addCorner(mainSlot, 48)
+addShadow(mainSlot, 10, 0.6)
 
-local mainStroke = Instance.new("UIStroke")
-mainStroke.Color = Color3.fromRGB(200, 205, 215)
-mainStroke.Thickness = 4.5
-mainStroke.Parent = mainItemCircle
+-- Main Slot Metallic Chrome Ring
+local mainStroke = addStroke(mainSlot, Color3.fromRGB(255, 255, 255), 5)
+addGradient(mainStroke, ColorSequence.new({
+	ColorSequenceKeypoint.new(0.0, Color3.fromRGB(255, 255, 255)),
+	ColorSequenceKeypoint.new(0.4, Color3.fromRGB(180, 190, 210)),
+	ColorSequenceKeypoint.new(0.8, Color3.fromRGB(90, 100, 120)),
+	ColorSequenceKeypoint.new(1.0, Color3.fromRGB(200, 210, 230)),
+}), -45)
 
--- Inner Ring Glow
-local mainInnerGlow = Instance.new("Frame")
-mainInnerGlow.Size = UDim2.new(1, -8, 1, -8)
-mainInnerGlow.Position = UDim2.new(0, 4, 0, 4)
-mainInnerGlow.BackgroundTransparency = 1
-mainInnerGlow.Parent = mainItemCircle
-addCorner(mainInnerGlow, 40)
-local innerStroke = Instance.new("UIStroke")
-innerStroke.Color = Color3.fromRGB(60, 65, 80)
-innerStroke.Thickness = 2
-innerStroke.Parent = mainInnerGlow
+-- Main Slot Inner Glass Sheen & Dark Radial Center
+local mainInner = Instance.new("Frame")
+mainInner.Size = UDim2.new(1, -6, 1, -6)
+mainInner.Position = UDim2.new(0, 3, 0, 3)
+mainInner.BackgroundColor3 = Color3.fromRGB(10, 12, 18)
+mainInner.BackgroundTransparency = 0.1
+mainInner.ZIndex = 4
+mainInner.Parent = mainSlot
+addCorner(mainInner, 45)
+addGradient(mainInner, ColorSequence.new({
+	ColorSequenceKeypoint.new(0.0, Color3.fromRGB(45, 55, 80)),
+	ColorSequenceKeypoint.new(0.5, Color3.fromRGB(15, 18, 28)),
+	ColorSequenceKeypoint.new(1.0, Color3.fromRGB(5, 7, 12)),
+}), 60)
 
--- Secondary Item Circle (Stored / Backup Item)
-local subItemCircle = Instance.new("Frame")
-subItemCircle.Name = "SubItemSlot"
-subItemCircle.Size = UDim2.new(0, 52, 0, 52)
-subItemCircle.Position = UDim2.new(0, 5, 0, 5)
-subItemCircle.BackgroundColor3 = Color3.fromRGB(12, 14, 20)
-subItemCircle.BackgroundTransparency = 0.35
-subItemCircle.ZIndex = 2
-subItemCircle.Parent = itemContainer
-addCorner(subItemCircle, 26)
+-- Curved Glass Highlight (Reflection Arc)
+local glassArc = Instance.new("Frame")
+glassArc.Name = "GlassReflection"
+glassArc.Size = UDim2.new(0.85, 0, 0.4, 0)
+glassArc.Position = UDim2.new(0.075, 0, 0.05, 0)
+glassArc.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+glassArc.BackgroundTransparency = 0.82
+glassArc.ZIndex = 5
+glassArc.Parent = mainInner
+addCorner(glassArc, 20)
+addGradient(glassArc, ColorSequence.new({
+	ColorSequenceKeypoint.new(0.0, Color3.fromRGB(255, 255, 255)),
+	ColorSequenceKeypoint.new(1.0, Color3.fromRGB(255, 255, 255)),
+}), 90)
 
-local subStroke = Instance.new("UIStroke")
-subStroke.Color = Color3.fromRGB(160, 165, 175)
-subStroke.Thickness = 3.5
-subStroke.Parent = subItemCircle
+-- Secondary Stored Item Slot (Top-Left Overlap)
+local subSlot = Instance.new("Frame")
+subSlot.Name = "SubItemSlot"
+subSlot.Size = UDim2.new(0, 60, 0, 60)
+subSlot.Position = UDim2.new(0, 8, 0, 8)
+subSlot.BackgroundColor3 = Color3.fromRGB(15, 18, 28)
+subSlot.BackgroundTransparency = 0.25
+subSlot.ZIndex = 6
+subSlot.Parent = itemContainer
+addCorner(subSlot, 30)
+addShadow(subSlot, 8, 0.65)
 
--- Placeholder Icons for Items
-local mainItemIcon = Instance.new("ImageLabel")
-mainItemIcon.Name = "ItemIcon"
-mainItemIcon.Size = UDim2.new(0.8, 0, 0.8, 0)
-mainItemIcon.Position = UDim2.new(0.1, 0, 0.1, 0)
-mainItemIcon.BackgroundTransparency = 1
-mainItemIcon.Image = ""
-mainItemIcon.Parent = mainItemCircle
+local subStroke = addStroke(subSlot, Color3.fromRGB(255, 255, 255), 4)
+addGradient(subStroke, ColorSequence.new({
+	ColorSequenceKeypoint.new(0.0, Color3.fromRGB(240, 245, 255)),
+	ColorSequenceKeypoint.new(0.5, Color3.fromRGB(140, 150, 170)),
+	ColorSequenceKeypoint.new(1.0, Color3.fromRGB(80, 90, 110)),
+}), -45)
 
-local subItemIcon = Instance.new("ImageLabel")
-subItemIcon.Name = "ItemIcon"
-subItemIcon.Size = UDim2.new(0.8, 0, 0.8, 0)
-subItemIcon.Position = UDim2.new(0.1, 0, 0.1, 0)
-subItemIcon.BackgroundTransparency = 1
-subItemIcon.Image = ""
-subItemIcon.Parent = subItemCircle
+local subInner = Instance.new("Frame")
+subInner.Size = UDim2.new(1, -4, 1, -4)
+subInner.Position = UDim2.new(0, 2, 0, 2)
+subInner.BackgroundColor3 = Color3.fromRGB(10, 12, 18)
+subInner.BackgroundTransparency = 0.1
+subInner.ZIndex = 7
+subInner.Parent = subSlot
+addCorner(subInner, 28)
+addGradient(subInner, ColorSequence.new({
+	ColorSequenceKeypoint.new(0.0, Color3.fromRGB(40, 50, 75)),
+	ColorSequenceKeypoint.new(1.0, Color3.fromRGB(8, 10, 16)),
+}), 60)
+
+-- Item Icons (Placeholders)
+local mainIcon = Instance.new("ImageLabel")
+mainIcon.Name = "ItemIcon"
+mainIcon.Size = UDim2.new(0.75, 0, 0.75, 0)
+mainIcon.Position = UDim2.new(0.125, 0, 0.125, 0)
+mainIcon.BackgroundTransparency = 1
+mainIcon.ZIndex = 6
+mainIcon.Parent = mainSlot
+
+local subIcon = Instance.new("ImageLabel")
+subIcon.Name = "ItemIcon"
+subIcon.Size = UDim2.new(0.75, 0, 0.75, 0)
+subIcon.Position = UDim2.new(0.125, 0, 0.125, 0)
+subIcon.BackgroundTransparency = 1
+subIcon.ZIndex = 8
+subIcon.Parent = subSlot
 
 
 -- ============================================================
--- 2. BOTTOM-LEFT: COINS & LAPS PANEL (MK8 STYLE)
+-- 2. BOTTOM-LEFT: COINS & LAPS PANEL (GLOSSY MK8 METALLIC)
 -- ============================================================
 local infoPanel = Instance.new("Frame")
 infoPanel.Name = "CoinsAndLapPanel"
-infoPanel.Size = UDim2.new(0, 240, 0, 56)
-infoPanel.Position = UDim2.new(0, 30, 1, -85)
-infoPanel.BackgroundColor3 = Color3.fromRGB(10, 12, 18)
-infoPanel.BackgroundTransparency = 0.35
+infoPanel.Size = UDim2.new(0, 260, 0, 62)
+infoPanel.Position = UDim2.new(0, 35, 1, -95)
+infoPanel.BackgroundColor3 = Color3.fromRGB(12, 15, 24)
+infoPanel.BackgroundTransparency = 0.25
 infoPanel.BorderSizePixel = 0
+infoPanel.ZIndex = 3
 infoPanel.Parent = sg
-addCorner(infoPanel, 16)
+addCorner(infoPanel, 18)
+addShadow(infoPanel, 12, 0.55)
 
-local panelStroke = Instance.new("UIStroke")
-panelStroke.Color = Color3.fromRGB(90, 95, 110)
-panelStroke.Thickness = 2
-panelStroke.Parent = infoPanel
+-- Panel Bevel Border
+local panelStroke = addStroke(infoPanel, Color3.fromRGB(255, 255, 255), 2.5)
+addGradient(panelStroke, ColorSequence.new({
+	ColorSequenceKeypoint.new(0.0, Color3.fromRGB(220, 230, 250)),
+	ColorSequenceKeypoint.new(0.5, Color3.fromRGB(100, 110, 130)),
+	ColorSequenceKeypoint.new(1.0, Color3.fromRGB(40, 45, 60)),
+}), 90)
 
--- Coin Section (Left Half)
-local coinFrame = Instance.new("Frame")
-coinFrame.Name = "CoinSection"
-coinFrame.Size = UDim2.new(0.48, 0, 1, 0)
-coinFrame.Position = UDim2.new(0, 0, 0, 0)
-coinFrame.BackgroundTransparency = 1
-coinFrame.Parent = infoPanel
+-- Panel Background Gradient
+addGradient(infoPanel, ColorSequence.new({
+	ColorSequenceKeypoint.new(0.0, Color3.fromRGB(28, 34, 52)),
+	ColorSequenceKeypoint.new(0.4, Color3.fromRGB(14, 17, 26)),
+	ColorSequenceKeypoint.new(1.0, Color3.fromRGB(8, 10, 16)),
+}), 90)
 
--- Gold Coin Icon
-local coinBg = Instance.new("Frame")
-coinBg.Size = UDim2.new(0, 32, 0, 32)
-coinBg.Position = UDim2.new(0, 14, 0.5, -16)
-coinBg.BackgroundColor3 = Color3.fromRGB(255, 205, 0)
-coinBg.Parent = coinFrame
-addCorner(coinBg, 16)
-local coinOuterStroke = Instance.new("UIStroke")
-coinOuterStroke.Color = Color3.fromRGB(200, 140, 0)
-coinOuterStroke.Thickness = 3
-coinOuterStroke.Parent = coinBg
+-- Glossy Top Shine Bar
+local panelTopShine = Instance.new("Frame")
+panelTopShine.Size = UDim2.new(1, -20, 0, 2)
+panelTopShine.Position = UDim2.new(0, 10, 0, 3)
+panelTopShine.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+panelTopShine.BackgroundTransparency = 0.6
+panelTopShine.BorderSizePixel = 0
+panelTopShine.ZIndex = 4
+panelTopShine.Parent = infoPanel
+addCorner(panelTopShine, 1)
 
-local coinInner = Instance.new("TextLabel")
-coinInner.Size = UDim2.new(1, 0, 1, 0)
-coinInner.BackgroundTransparency = 1
-coinInner.Text = "$"
-coinInner.Font = Enum.Font.FredokaOne
-coinInner.TextSize = 20
-coinInner.TextColor3 = Color3.fromRGB(160, 100, 0)
-coinInner.Parent = coinBg
+-- ─── COIN SECTION ───
+local coinSection = Instance.new("Frame")
+coinSection.Name = "CoinSection"
+coinSection.Size = UDim2.new(0.48, 0, 1, 0)
+coinSection.Position = UDim2.new(0, 0, 0, 0)
+coinSection.BackgroundTransparency = 1
+coinSection.ZIndex = 4
+coinSection.Parent = infoPanel
 
-local coinCountLabel = Instance.new("TextLabel")
-coinCountLabel.Name = "CoinCount"
-coinCountLabel.Size = UDim2.new(0, 55, 1, 0)
-coinCountLabel.Position = UDim2.new(0, 52, 0, 0)
-coinCountLabel.BackgroundTransparency = 1
-coinCountLabel.Text = "00"
-coinCountLabel.Font = Enum.Font.FredokaOne
-coinCountLabel.TextSize = 28
-coinCountLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-coinCountLabel.TextXAlignment = Enum.TextXAlignment.Left
-coinCountLabel.Parent = coinFrame
+-- Glowing Yellow Backing Halo for Coin
+local coinHalo = Instance.new("Frame")
+coinHalo.Size = UDim2.new(0, 42, 0, 42)
+coinHalo.Position = UDim2.new(0, 11, 0.5, -21)
+coinHalo.BackgroundColor3 = Color3.fromRGB(255, 210, 0)
+coinHalo.BackgroundTransparency = 0.75
+coinHalo.ZIndex = 4
+coinHalo.Parent = coinSection
+addCorner(coinHalo, 21)
 
--- Vertical Separator
-local sep = Instance.new("Frame")
-sep.Size = UDim2.new(0, 2, 0.6, 0)
-sep.Position = UDim2.new(0.48, 0, 0.2, 0)
-sep.BackgroundColor3 = Color3.fromRGB(150, 155, 170)
-sep.BackgroundTransparency = 0.5
-sep.BorderSizePixel = 0
-sep.Parent = infoPanel
+-- 3D Gold Coin Badge
+local coinBadge = Instance.new("Frame")
+coinBadge.Size = UDim2.new(0, 34, 0, 34)
+coinBadge.Position = UDim2.new(0, 15, 0.5, -17)
+coinBadge.BackgroundColor3 = Color3.fromRGB(255, 200, 0)
+coinBadge.ZIndex = 5
+coinBadge.Parent = coinSection
+addCorner(coinBadge, 17)
+addGradient(coinBadge, ColorSequence.new({
+	ColorSequenceKeypoint.new(0.0, Color3.fromRGB(255, 245, 140)),
+	ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 195, 0)),
+	ColorSequenceKeypoint.new(1.0, Color3.fromRGB(200, 130, 0)),
+}), -45)
 
--- Lap Section (Right Half)
-local lapFrame = Instance.new("Frame")
-lapFrame.Name = "LapSection"
-lapFrame.Size = UDim2.new(0.5, 0, 1, 0)
-lapFrame.Position = UDim2.new(0.5, 0, 0, 0)
-lapFrame.BackgroundTransparency = 1
-lapFrame.Parent = infoPanel
+local coinStroke = addStroke(coinBadge, Color3.fromRGB(160, 95, 0), 2.5)
 
--- Checkered Flag Graphic / Icon
+-- Inner Star / Dollar Detail on Coin
+local coinDetail = Instance.new("TextLabel")
+coinDetail.Size = UDim2.new(1, 0, 1, 0)
+coinDetail.BackgroundTransparency = 1
+coinDetail.Text = "★"
+coinDetail.Font = Enum.Font.FredokaOne
+coinDetail.TextSize = 20
+coinDetail.TextColor3 = Color3.fromRGB(150, 85, 0)
+coinDetail.ZIndex = 6
+coinDetail.Parent = coinBadge
+
+-- Coin Count Text (With Gradient & Stroke)
+local coinLabel = Instance.new("TextLabel")
+coinLabel.Name = "CoinCount"
+coinLabel.Size = UDim2.new(0, 65, 1, 0)
+coinLabel.Position = UDim2.new(0, 56, 0, 0)
+coinLabel.BackgroundTransparency = 1
+coinLabel.Text = "00"
+coinLabel.Font = Enum.Font.FredokaOne
+coinLabel.TextSize = 32
+coinLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+coinLabel.TextXAlignment = Enum.TextXAlignment.Left
+coinLabel.ZIndex = 5
+coinLabel.Parent = coinSection
+
+local coinTextStroke = addStroke(coinLabel, Color3.fromRGB(10, 12, 20), 3.5, Enum.ApplyStrokeMode.Contextual)
+addGradient(coinLabel, ColorSequence.new({
+	ColorSequenceKeypoint.new(0.0, Color3.fromRGB(255, 255, 255)),
+	ColorSequenceKeypoint.new(1.0, Color3.fromRGB(230, 235, 245)),
+}), 90)
+
+-- ─── SLANTED SEPARATOR BAR ───
+local sepBar = Instance.new("Frame")
+sepBar.Size = UDim2.new(0, 3, 0.65, 0)
+sepBar.Position = UDim2.new(0.485, 0, 0.175, 0)
+sepBar.BackgroundColor3 = Color3.fromRGB(180, 195, 225)
+sepBar.BackgroundTransparency = 0.4
+sepBar.Rotation = 12
+sepBar.BorderSizePixel = 0
+sepBar.ZIndex = 5
+sepBar.Parent = infoPanel
+
+-- ─── LAP SECTION ───
+local lapSection = Instance.new("Frame")
+lapSection.Name = "LapSection"
+lapSection.Size = UDim2.new(0.5, 0, 1, 0)
+lapSection.Position = UDim2.new(0.5, 0, 0, 0)
+lapSection.BackgroundTransparency = 1
+lapSection.ZIndex = 4
+lapSection.Parent = infoPanel
+
+-- Checkered Flag Graphic
 local flagIcon = Instance.new("TextLabel")
-flagIcon.Size = UDim2.new(0, 32, 0, 32)
-flagIcon.Position = UDim2.new(0, 10, 0.5, -16)
+flagIcon.Size = UDim2.new(0, 34, 0, 34)
+flagIcon.Position = UDim2.new(0, 12, 0.5, -17)
 flagIcon.BackgroundTransparency = 1
 flagIcon.Text = "🏁"
-flagIcon.TextSize = 24
-flagIcon.Parent = lapFrame
+flagIcon.TextSize = 26
+flagIcon.ZIndex = 5
+flagIcon.Parent = lapSection
 
-local lapCountLabel = Instance.new("TextLabel")
-lapCountLabel.Name = "LapCount"
-lapCountLabel.Size = UDim2.new(0, 70, 1, 0)
-lapCountLabel.Position = UDim2.new(0, 44, 0, 0)
-lapCountLabel.BackgroundTransparency = 1
-lapCountLabel.Text = "1/3"
-lapCountLabel.Font = Enum.Font.FredokaOne
-lapCountLabel.TextSize = 26
-lapCountLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-lapCountLabel.TextXAlignment = Enum.TextXAlignment.Left
-lapCountLabel.Parent = lapFrame
+local lapLabel = Instance.new("TextLabel")
+lapLabel.Name = "LapCount"
+lapLabel.Size = UDim2.new(0, 75, 1, 0)
+lapLabel.Position = UDim2.new(0, 48, 0, 0)
+lapLabel.BackgroundTransparency = 1
+lapLabel.Text = "1/3"
+lapLabel.Font = Enum.Font.FredokaOne
+lapLabel.TextSize = 30
+lapLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+lapLabel.TextXAlignment = Enum.TextXAlignment.Left
+lapLabel.ZIndex = 5
+lapLabel.Parent = lapSection
+
+local lapTextStroke = addStroke(lapLabel, Color3.fromRGB(10, 12, 20), 3.5, Enum.ApplyStrokeMode.Contextual)
+addGradient(lapLabel, ColorSequence.new({
+	ColorSequenceKeypoint.new(0.0, Color3.fromRGB(255, 255, 255)),
+	ColorSequenceKeypoint.new(1.0, Color3.fromRGB(220, 230, 245)),
+}), 90)
 
 
 -- ============================================================
--- 3. BOTTOM-RIGHT: POSITION RANK (LUGAR - MK8 STYLE)
+-- 3. BOTTOM-RIGHT: POSITION RANK (3D VIBRANT MK8 STYLE)
 -- ============================================================
 local rankContainer = Instance.new("Frame")
 rankContainer.Name = "RankContainer"
-rankContainer.Size = UDim2.new(0, 180, 0, 110)
-rankContainer.Position = UDim2.new(1, -200, 1, -130)
+rankContainer.Size = UDim2.new(0, 220, 0, 130)
+rankContainer.Position = UDim2.new(1, -240, 1, -145)
 rankContainer.BackgroundTransparency = 1
+rankContainer.ZIndex = 4
 rankContainer.Parent = sg
 
--- Big Position Number
+-- Soft Backing Radial Glow so position number pops against any terrain
+local rankGlow = Instance.new("Frame")
+rankGlow.Name = "RankGlow"
+rankGlow.Size = UDim2.new(0, 160, 0, 110)
+rankGlow.Position = UDim2.new(0, 20, 0, 10)
+rankGlow.BackgroundColor3 = Color3.fromRGB(255, 140, 0)
+rankGlow.BackgroundTransparency = 0.85
+rankGlow.ZIndex = 3
+rankGlow.Parent = rankContainer
+addCorner(rankGlow, 55)
+
+-- Big Skewed Position Number
 local rankNumLabel = Instance.new("TextLabel")
 rankNumLabel.Name = "RankNum"
-rankNumLabel.Size = UDim2.new(0, 110, 1, 0)
+rankNumLabel.Size = UDim2.new(0, 130, 1, 0)
 rankNumLabel.Position = UDim2.new(0, 0, 0, 0)
 rankNumLabel.BackgroundTransparency = 1
 rankNumLabel.Text = "1"
-rankNumLabel.Font = Enum.Font.FredokaOne
-rankNumLabel.TextSize = 100
-rankNumLabel.TextColor3 = Color3.fromRGB(255, 165, 0)
+rankNumLabel.Font = Enum.Font.LuckiestGuy
+rankNumLabel.TextSize = 115
+rankNumLabel.TextColor3 = Color3.fromRGB(255, 180, 0)
 rankNumLabel.TextXAlignment = Enum.TextXAlignment.Right
+rankNumLabel.ZIndex = 5
 rankNumLabel.Parent = rankContainer
 
-local rankNumStroke = Instance.new("UIStroke")
-rankNumStroke.Color = Color3.fromRGB(20, 20, 30)
-rankNumStroke.Thickness = 6
-rankNumStroke.Parent = rankNumLabel
+local rankNumStroke = addStroke(rankNumLabel, Color3.fromRGB(12, 14, 24), 7, Enum.ApplyStrokeMode.Contextual)
 
 -- Position Suffix ("st", "nd", "rd", "th")
 local rankSuffixLabel = Instance.new("TextLabel")
 rankSuffixLabel.Name = "RankSuffix"
-rankSuffixLabel.Size = UDim2.new(0, 60, 0.5, 0)
-rankSuffixLabel.Position = UDim2.new(0, 114, 0, 48)
+rankSuffixLabel.Size = UDim2.new(0, 75, 0.5, 0)
+rankSuffixLabel.Position = UDim2.new(0, 134, 0, 52)
 rankSuffixLabel.BackgroundTransparency = 1
 rankSuffixLabel.Text = "st"
-rankSuffixLabel.Font = Enum.Font.FredokaOne
-rankSuffixLabel.TextSize = 42
-rankSuffixLabel.TextColor3 = Color3.fromRGB(255, 190, 40)
+rankSuffixLabel.Font = Enum.Font.LuckiestGuy
+rankSuffixLabel.TextSize = 48
+rankSuffixLabel.TextColor3 = Color3.fromRGB(255, 210, 50)
 rankSuffixLabel.TextXAlignment = Enum.TextXAlignment.Left
+rankSuffixLabel.ZIndex = 5
 rankSuffixLabel.Parent = rankContainer
 
-local rankSuffixStroke = Instance.new("UIStroke")
-rankSuffixStroke.Color = Color3.fromRGB(20, 20, 30)
-rankSuffixStroke.Thickness = 4.5
-rankSuffixStroke.Parent = rankSuffixLabel
+local rankSuffixStroke = addStroke(rankSuffixLabel, Color3.fromRGB(12, 14, 24), 5, Enum.ApplyStrokeMode.Contextual)
 
+-- Dynamic Color Gradients according to Rank
 local function updateRankDisplay(rankNumber)
 	local suffixes = { [1] = "st", [2] = "nd", [3] = "rd" }
 	local suffix = suffixes[rankNumber] or "th"
 	rankNumLabel.Text = tostring(rankNumber)
 	rankSuffixLabel.Text = suffix
 
+	-- Remove old gradients if any
+	local oldG1 = rankNumLabel:FindFirstChildOfClass("UIGradient")
+	if oldG1 then oldG1:Destroy() end
+	local oldG2 = rankSuffixLabel:FindFirstChildOfClass("UIGradient")
+	if oldG2 then oldG2:Destroy() end
+
+	local seq, glowColor
 	if rankNumber == 1 then
-		rankNumLabel.TextColor3 = Color3.fromRGB(255, 180, 0)
-		rankSuffixLabel.TextColor3 = Color3.fromRGB(255, 210, 50)
+		seq = ColorSequence.new({
+			ColorSequenceKeypoint.new(0.0, Color3.fromRGB(255, 245, 120)),
+			ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 185, 0)),
+			ColorSequenceKeypoint.new(1.0, Color3.fromRGB(230, 110, 0)),
+		})
+		glowColor = Color3.fromRGB(255, 180, 0)
 	elseif rankNumber == 2 then
-		rankNumLabel.TextColor3 = Color3.fromRGB(220, 225, 235)
-		rankSuffixLabel.TextColor3 = Color3.fromRGB(240, 245, 255)
+		seq = ColorSequence.new({
+			ColorSequenceKeypoint.new(0.0, Color3.fromRGB(255, 255, 255)),
+			ColorSequenceKeypoint.new(0.5, Color3.fromRGB(200, 215, 235)),
+			ColorSequenceKeypoint.new(1.0, Color3.fromRGB(120, 140, 170)),
+		})
+		glowColor = Color3.fromRGB(180, 200, 230)
 	elseif rankNumber == 3 then
-		rankNumLabel.TextColor3 = Color3.fromRGB(220, 130, 50)
-		rankSuffixLabel.TextColor3 = Color3.fromRGB(240, 160, 80)
+		seq = ColorSequence.new({
+			ColorSequenceKeypoint.new(0.0, Color3.fromRGB(255, 210, 140)),
+			ColorSequenceKeypoint.new(0.5, Color3.fromRGB(230, 140, 60)),
+			ColorSequenceKeypoint.new(1.0, Color3.fromRGB(170, 70, 20)),
+		})
+		glowColor = Color3.fromRGB(230, 130, 40)
 	else
-		rankNumLabel.TextColor3 = Color3.fromRGB(255, 140, 20)
-		rankSuffixLabel.TextColor3 = Color3.fromRGB(255, 170, 40)
+		seq = ColorSequence.new({
+			ColorSequenceKeypoint.new(0.0, Color3.fromRGB(255, 200, 60)),
+			ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 140, 0)),
+			ColorSequenceKeypoint.new(1.0, Color3.fromRGB(200, 70, 0)),
+		})
+		glowColor = Color3.fromRGB(255, 130, 0)
 	end
+
+	addGradient(rankNumLabel, seq, 85)
+	addGradient(rankSuffixLabel, seq, 85)
+	rankGlow.BackgroundColor3 = glowColor
 end
 updateRankDisplay(1)
 
@@ -270,71 +439,67 @@ updateRankDisplay(1)
 local cdLabel = Instance.new("TextLabel")
 cdLabel.Name = "CountdownLabel"
 cdLabel.Text = ""
-cdLabel.Font = Enum.Font.FredokaOne
-cdLabel.TextSize = 140
-cdLabel.TextColor3 = Color3.fromRGB(255, 205, 0)
-cdLabel.Size = UDim2.new(1, 0, 0, 180)
-cdLabel.Position = UDim2.new(0, 0, 0.5, -90)
+cdLabel.Font = Enum.Font.LuckiestGuy
+cdLabel.TextSize = 150
+cdLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
+cdLabel.Size = UDim2.new(1, 0, 0, 200)
+cdLabel.Position = UDim2.new(0, 0, 0.5, -100)
 cdLabel.BackgroundTransparency = 1
 cdLabel.TextXAlignment = Enum.TextXAlignment.Center
 cdLabel.TextTransparency = 1
 cdLabel.ZIndex = 20
 cdLabel.Parent = sg
 
-local cdStroke = Instance.new("UIStroke")
-cdStroke.Color = Color3.fromRGB(20, 20, 30)
-cdStroke.Thickness = 7
-cdStroke.Parent = cdLabel
+local cdStroke = addStroke(cdLabel, Color3.fromRGB(10, 12, 22), 8, Enum.ApplyStrokeMode.Contextual)
+addGradient(cdLabel, ColorSequence.new({
+	ColorSequenceKeypoint.new(0.0, Color3.fromRGB(255, 255, 160)),
+	ColorSequenceKeypoint.new(1.0, Color3.fromRGB(255, 160, 0)),
+}), 90)
 
--- Lap Banner Notification
+-- Lap Banner Notification Frame
 local bannerFrame = Instance.new("Frame")
 bannerFrame.Name = "LapBanner"
-bannerFrame.Size = UDim2.new(0, 440, 0, 84)
-bannerFrame.Position = UDim2.new(0.5, -220, 0.28, 0)
-bannerFrame.BackgroundColor3 = Color3.fromRGB(15, 20, 35)
+bannerFrame.Size = UDim2.new(0, 460, 0, 88)
+bannerFrame.Position = UDim2.new(0.5, -230, 0.28, 0)
+bannerFrame.BackgroundColor3 = Color3.fromRGB(14, 18, 30)
 bannerFrame.BackgroundTransparency = 1
 bannerFrame.BorderSizePixel = 0
 bannerFrame.ZIndex = 15
 bannerFrame.Parent = sg
-addCorner(bannerFrame, 20)
+addCorner(bannerFrame, 22)
+addShadow(bannerFrame, 12, 0.6)
 
-local bannerStroke = Instance.new("UIStroke")
-bannerStroke.Color = Color3.fromRGB(255, 200, 0)
-bannerStroke.Thickness = 3
+local bannerStroke = addStroke(bannerFrame, Color3.fromRGB(255, 200, 0), 3.5)
 bannerStroke.Transparency = 1
-bannerStroke.Parent = bannerFrame
 
 local bannerLabel = Instance.new("TextLabel")
 bannerLabel.Size = UDim2.new(1, 0, 1, 0)
 bannerLabel.BackgroundTransparency = 1
 bannerLabel.Text = ""
-bannerLabel.Font = Enum.Font.FredokaOne
-bannerLabel.TextSize = 36
+bannerLabel.Font = Enum.Font.LuckiestGuy
+bannerLabel.TextSize = 38
 bannerLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 bannerLabel.ZIndex = 16
 bannerLabel.Parent = bannerFrame
 
-local bannerTextStroke = Instance.new("UIStroke")
-bannerTextStroke.Color = Color3.fromRGB(10, 10, 20)
-bannerTextStroke.Thickness = 4
+local bannerTextStroke = addStroke(bannerLabel, Color3.fromRGB(10, 12, 20), 5, Enum.ApplyStrokeMode.Contextual)
 bannerTextStroke.Transparency = 1
-bannerTextStroke.Parent = bannerLabel
 
 local function showBanner(text, strokeColor)
 	bannerLabel.Text = text
 	bannerStroke.Color = strokeColor or Color3.fromRGB(255, 200, 0)
 	
-	bannerFrame.BackgroundTransparency = 0.2
+	bannerFrame.BackgroundTransparency = 0.15
 	bannerStroke.Transparency = 0
 	bannerTextStroke.Transparency = 0
 	bannerLabel.TextTransparency = 0
 	
-	bannerFrame.Size = UDim2.new(0, 320, 0, 60)
-	bannerFrame.Position = UDim2.new(0.5, -160, 0.28, 0)
+	bannerFrame.Size = UDim2.new(0, 340, 0, 64)
+	bannerFrame.Position = UDim2.new(0.5, -170, 0.28, 0)
 	
 	local popIn = TweenService:Create(bannerFrame,
 		TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-		{ Size = UDim2.new(0, 440, 0, 84), Position = UDim2.new(0.5, -220, 0.28, 0) }
+		{ Size = UDim2.new(0, 460, 0, 88), Position = UDim2.new(0.5, -230, 0.28, 0) }
 	)
 	popIn:Play()
 	
@@ -356,22 +521,22 @@ local totalLaps = 3
 
 RF:WaitForChild("StartRace", 10).OnClientEvent:Connect(function(laps)
 	totalLaps = laps or 3
-	lapCountLabel.Text = "1/" .. totalLaps
+	lapLabel.Text = "1/" .. totalLaps
 	sg.Enabled = true
 end)
 
 RF:WaitForChild("Countdown", 10).OnClientEvent:Connect(function(count)
 	cdLabel.Text = count == 0 and "GO!" or tostring(count)
-	cdLabel.TextColor3 = count == 0 and Color3.fromRGB(40, 255, 120) or Color3.fromRGB(255, 205, 0)
+	cdLabel.TextColor3 = count == 0 and Color3.fromRGB(40, 255, 120) or Color3.fromRGB(255, 215, 0)
 	cdLabel.TextTransparency = 0
 	cdStroke.Transparency = 0
 	
-	cdLabel.Size = UDim2.new(0, 100, 0, 100)
-	cdLabel.Position = UDim2.new(0.5, -50, 0.5, -50)
+	cdLabel.Size = UDim2.new(0, 110, 0, 110)
+	cdLabel.Position = UDim2.new(0.5, -55, 0.5, -55)
 	
 	local pop = TweenService:Create(cdLabel,
 		TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-		{ Size = UDim2.new(1, 0, 0, 180), Position = UDim2.new(0, 0, 0.5, -90) }
+		{ Size = UDim2.new(1, 0, 0, 200), Position = UDim2.new(0, 0, 0.5, -100) }
 	)
 	pop:Play()
 	
@@ -381,13 +546,13 @@ end)
 
 RF:WaitForChild("LapUpdate", 10).OnClientEvent:Connect(function(currentLap, maxLaps)
 	totalLaps = maxLaps
-	lapCountLabel.Text = currentLap .. "/" .. maxLaps
+	lapLabel.Text = currentLap .. "/" .. maxLaps
 	
 	if currentLap < maxLaps then
 		showBanner("🏁  VOLTA " .. currentLap .. " DE " .. maxLaps, Color3.fromRGB(0, 160, 255))
 	else
 		showBanner("⚡  ÚLTIMA VOLTA!", Color3.fromRGB(255, 50, 50))
-		lapCountLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
+		lapLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
 	end
 end)
 
@@ -396,7 +561,7 @@ RF:WaitForChild("UpdatePositions", 10).OnClientEvent:Connect(function(data)
 		if e.name == player.Name then
 			updateRankDisplay(e.pos)
 			if e.lap then
-				lapCountLabel.Text = math.max(1, e.lap) .. "/" .. totalLaps
+				lapLabel.Text = math.max(1, e.lap) .. "/" .. totalLaps
 			end
 		end
 	end
@@ -407,4 +572,4 @@ RF:WaitForChild("PlayerFinished", 10).OnClientEvent:Connect(function(pos)
 	showBanner("🏆  FINISH! " .. pos .. "º LUGAR", Color3.fromRGB(255, 180, 0))
 end)
 
-print("[RaceHUD] MK8 Overlay UI v1 Loaded!")
+print("[RaceHUD] Ultra Premium MK8 Overlay UI Loaded!")
